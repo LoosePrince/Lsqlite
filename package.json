@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "tsx watch server/src/index.ts",
+    "dev:server": "tsx server/src/index.ts",
     "dev:web": "vite --host 0.0.0.0",
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsc -p tsconfig.server.json",
@@ -27,6 +27,7 @@
     "better-sqlite3": "^12.10.0",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
     "nanoid": "^5.1.11",

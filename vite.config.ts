@@ -1,5 +1,9 @@
+import 'dotenv/config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+
+const apiPort = process.env.PORT || '3000';
+const apiTarget = `http://localhost:${apiPort}`;
 
 export default defineConfig({
   plugins: [react()],
@@ -11,8 +15,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/admin': 'http://localhost:3000',
-      '/api': 'http://localhost:3000'
+      '/admin': apiTarget,
+      '/api': apiTarget
     }
   }
 });
