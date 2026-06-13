@@ -1,10 +1,12 @@
-import { Card, Typography } from 'antd';
+import { Button, Card, Typography } from 'antd';
 import type { ManagedDatabase, TableInfo } from '../api.js';
 import { CodeBlock } from '../components/CodeBlock.js';
 import { MotionPanel } from '../components/MotionPanel.js';
+import { useI18n } from '../i18n/context.js';
 import type { NoticeApi } from '../types.js';
 
 export function ApiExamplesTab({ database, table, notice }: { database: ManagedDatabase; table: TableInfo | null; notice: NoticeApi }) {
+  const { t } = useI18n();
   const tableName = table?.name || 'items';
   const externalQuery = `curl -X POST http://localhost:3000/api/query \\\n  -H "Authorization: Bearer <database_key>" \\\n  -H "Content-Type: application/json" \\\n  -d "{\"sql\":\"select * from ${tableName} limit 50\",\"mode\":\"read\"}"`;
   const externalTransaction = `curl -X POST http://localhost:3000/api/transaction \\\n  -H "Authorization: Bearer <database_key>" \\\n  -H "Content-Type: application/json" \\\n  -d "{\"statements\":[{\"sql\":\"insert into ${tableName}(name) values (?)\",\"params\":[\"demo\"]}]}"`;
@@ -14,27 +16,27 @@ export function ApiExamplesTab({ database, table, notice }: { database: ManagedD
 
   async function copy(value: string) {
     await navigator.clipboard.writeText(value);
-    notice.success('示例已复制');
+    notice.success(t('api.copied'));
   }
 
   return (
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">API Examples</Typography.Text>
-          <Typography.Title level={3}>接口示例</Typography.Title>
+          <Typography.Text className="eyebrow">{t('tabs.api')}</Typography.Text>
+          <Typography.Title level={3}>{t('api.title')}</Typography.Title>
         </div>
       </div>
       <div className="two-column-grid">
-        <Card title="外部 key API" className="admin-card">
-          <CodeBlock title="查询" value={externalQuery} onCopy={() => copy(externalQuery)} />
-          <CodeBlock title="事务" value={externalTransaction} onCopy={() => copy(externalTransaction)} />
-          <CodeBlock title="fetch" value={fetchExample} onCopy={() => copy(fetchExample)} />
+        <Card title={t('api.externalKeyApi')} className="admin-card">
+          <CodeBlock title={t('common.query')} value={externalQuery} onCopy={() => copy(externalQuery)} />
+          <CodeBlock title={t('common.transaction')} value={externalTransaction} onCopy={() => copy(externalTransaction)} />
+          <CodeBlock title={t('common.fetch')} value={fetchExample} onCopy={() => copy(fetchExample)} />
         </Card>
-        <Card title="管理接口" className="admin-card">
-          <CodeBlock title="表列表" value={`GET /admin/databases/${database.id}/tables`} onCopy={() => copy(`GET /admin/databases/${database.id}/tables`)} />
-          <CodeBlock title="分页行数据" value={adminRows} onCopy={() => copy(adminRows)} />
-          <CodeBlock title="插入行" value={adminInsert} onCopy={() => copy(adminInsert)} />
+        <Card title={t('api.adminApi')} className="admin-card">
+          <CodeBlock title={t('api.tableList')} value={`GET /admin/databases/${database.id}/tables`} onCopy={() => copy(`GET /admin/databases/${database.id}/tables`)} />
+          <CodeBlock title={t('api.paginatedRows')} value={adminRows} onCopy={() => copy(adminRows)} />
+          <CodeBlock title={t('api.insertRow')} value={adminInsert} onCopy={() => copy(adminInsert)} />
         </Card>
       </div>
     </MotionPanel>

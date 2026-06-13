@@ -6,6 +6,7 @@ import { JsonEditor } from '../components/JsonEditor.js';
 import { MotionPanel } from '../components/MotionPanel.js';
 import { TablePicker } from '../components/TablePicker.js';
 import { confirmDanger } from '../components/confirmDanger.js';
+import { useI18n } from '../i18n/context.js';
 import type { NoticeApi, RowRecord } from '../types.js';
 import { parseJsonObject, prettyJson } from '../utils/json.js';
 import { primaryWhere, tableColumns, writableValues } from '../utils/schema.js';
@@ -31,6 +32,7 @@ export function BrowseTab({
   onOpenInsertRow: () => void;
   refreshSignal?: number;
 }) {
+  const { t } = useI18n();
   const [rowsResult, setRowsResult] = useState<RowsResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(50);
@@ -58,12 +60,12 @@ export function BrowseTab({
         setRowsResult(result.result);
         setOffset(nextOffset);
       } catch (error) {
-        notifyError(notice, '读取行数据', error);
+        notifyError(notice, t('browse.loadRowsAction'), error, t);
       } finally {
         setLoading(false);
       }
     },
-    [database.id, limit, notice, offset, order, orderBy, selectedTableName]
+    [database.id, limit, notice, offset, order, orderBy, selectedTableName, t]
   );
 
   useEffect(() => {
@@ -79,14 +81,14 @@ export function BrowseTab({
       render: (value: unknown) => <span className="cell-value">{valuePreview(value)}</span>
     })),
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
-      fixed: 'right',
+      fixed: 'right' as const,
       width: 150,
       render: (_, row) => (
         <Space>
-          <Button size="small" onClick={() => openEdit(row)}>编辑</Button>
-          <Button size="small" danger onClick={() => deleteRow(row)}>删除</Button>
+          <Button size="small" onClick={() => openEdit(row)}>{t('common.edit')}</Button>
+          <Button size="small" danger onClick={() => deleteRow(row)}>{t('common.delete')}</Button>
         </Space>
       )
     }
@@ -105,14 +107,14 @@ export function BrowseTab({
     beginOperation(notice);
     try {
       await api.updateRows(database.id, selectedTableName, {
-        values: parseJsonObject(valuesText, '更新值'),
-        where: parseJsonObject(whereText, '更新条件')
+        values: parseJsonObject(valuesText, t('json.updateValues')),
+        where: parseJsonObject(whereText, t('json.updateWhere'))
       });
-      notifySuccess(notice, '行数据已更新');
+      notifySuccess(notice, t('browse.rowUpdated'));
       setEditOpen(false);
       await refreshRows();
     } catch (error) {
-      notifyError(notice, '更新行数据', error);
+      notifyError(notice, t('browse.updateRowAction'), error, t);
     }
   }
 
@@ -120,14 +122,15 @@ export function BrowseTab({
     if (!selectedTableName) return;
     const where = primaryWhere(selectedTable, row);
     confirmDanger({
-      title: '删除行',
-      content: `将按条件删除：${JSON.stringify(where)}`,
-      okText: '删除行',
+      title: t('browse.deleteRow'),
+      content: t('browse.deleteRowContent', { where: JSON.stringify(where) }),
+      okText: t('browse.deleteRowOk'),
+      cancelText: t('common.cancel'),
       notice,
-      action: '删除行数据',
+      action: t('browse.deleteRowAction'),
       onOk: async () => {
         await api.deleteRows(database.id, selectedTableName, where);
-        notifySuccess(notice, '行数据已删除');
+        notifySuccess(notice, t('browse.rowDeleted'));
         await refreshRows();
       }
     });
@@ -141,31 +144,31 @@ export function BrowseTab({
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">浏览</Typography.Text>
-          <Typography.Title level={3}>数据浏览</Typography.Title>
+          <Typography.Text className="eyebrow">{t('tabs.browse')}</Typography.Text>
+          <Typography.Title level={3}>{t('browse.title')}</Typography.Title>
         </div>
         <Space wrap>
-          <Button type="primary" disabled={!selectedTableName} onClick={onOpenInsertRow}>插入行</Button>
-          <Button disabled={!selectedTableName} onClick={() => refreshRows()}>刷新</Button>
+          <Button type="primary" disabled={!selectedTableName} onClick={onOpenInsertRow}>{t('browse.insertRow')}</Button>
+          <Button disabled={!selectedTableName} onClick={() => refreshRows()}>{t('common.refresh')}</Button>
         </Space>
       </div>
 
       <Card className="admin-card browse-toolbar">
         <Space wrap>
-          <TablePicker tables={tableOnly} selectedTableName={selectedTableName} onSelect={onSelectTable} emptyText="暂无可浏览的数据表" />
-          <Select className="mini-select" value={limit} onChange={setLimit} options={[25, 50, 100, 200].map((value) => ({ label: `${value} 行`, value }))} />
+          <TablePicker tables={tableOnly} selectedTableName={selectedTableName} onSelect={onSelectTable} emptyText={t('browse.noBrowsableTables')} />
+          <Select className="mini-select" value={limit} onChange={setLimit} options={[25, 50, 100, 200].map((value) => ({ label: t('browse.rowsPerPage', { count: value }), value }))} />
           <Select
             className="mini-select"
             allowClear
-            placeholder="排序字段"
+            placeholder={t('browse.orderByPlaceholder')}
             value={orderBy}
             onChange={setOrderBy}
             options={visibleColumns.map((name) => ({ label: name, value: name }))}
           />
-          <Select className="mini-select" value={order} onChange={setOrder} options={[{ label: '降序', value: 'desc' }, { label: '升序', value: 'asc' }]} />
-          <Button disabled={!canPrev} onClick={() => refreshRows(Math.max(0, offset - limit))}>上一页</Button>
-          <Button disabled={!canNext} onClick={() => refreshRows(offset + limit)}>下一页</Button>
-          <Typography.Text type="secondary">共 {total} 行 · 偏移 {offset}</Typography.Text>
+          <Select className="mini-select" value={order} onChange={setOrder} options={[{ label: t('common.desc'), value: 'desc' }, { label: t('common.asc'), value: 'asc' }]} />
+          <Button disabled={!canPrev} onClick={() => refreshRows(Math.max(0, offset - limit))}>{t('common.prevPage')}</Button>
+          <Button disabled={!canNext} onClick={() => refreshRows(offset + limit)}>{t('common.nextPage')}</Button>
+          <Typography.Text type="secondary">{t('browse.totalRows', { total, offset })}</Typography.Text>
         </Space>
       </Card>
 
@@ -178,19 +181,19 @@ export function BrowseTab({
           columns={columns}
           pagination={false}
           scroll={{ x: Math.max(900, visibleColumns.length * 180), y: 520 }}
-          locale={{ emptyText: selectedTableName ? '当前页没有数据' : '请选择数据表' }}
+          locale={{ emptyText: selectedTableName ? t('browse.emptyPage') : t('browse.selectTable') }}
         />
       </Card>
 
-      <Modal title="编辑行" open={editOpen} onCancel={() => setEditOpen(false)} onOk={updateRow} width={760} okText="保存" destroyOnHidden>
-        <Typography.Text type="secondary">按 where 条件更新。请保持条件足够精确。</Typography.Text>
+      <Modal title={t('browse.editRow')} open={editOpen} onCancel={() => setEditOpen(false)} onOk={updateRow} width={760} okText={t('common.save')} destroyOnHidden>
+        <Typography.Text type="secondary">{t('browse.editHint')}</Typography.Text>
         <div className="modal-json-grid">
           <div>
-            <Typography.Title level={5}>更新值</Typography.Title>
+            <Typography.Title level={5}>{t('browse.updateValues')}</Typography.Title>
             <JsonEditor value={valuesText} onChange={setValuesText} rows={10} />
           </div>
           <div>
-            <Typography.Title level={5}>更新条件</Typography.Title>
+            <Typography.Title level={5}>{t('browse.updateWhere')}</Typography.Title>
             <JsonEditor value={whereText} onChange={setWhereText} rows={10} />
           </div>
         </div>

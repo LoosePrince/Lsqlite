@@ -1,12 +1,15 @@
 import { Empty, Typography } from 'antd';
+import { useI18n } from '../i18n/context.js';
 import { MotionPanel } from './MotionPanel.js';
 
-export function EmptyWorkbench({ title = '请选择数据库', description = '从左侧数据库树选择一个数据库，或先创建新的数据库。' }: { title?: string; description?: string }) {
+export function EmptyWorkbench({ title, description }: { title?: string; description?: string }) {
+  const { t } = useI18n();
+
   return (
     <MotionPanel className="empty-workbench">
       <Empty description={false} />
-      <Typography.Title level={3}>{title}</Typography.Title>
-      <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>
+      <Typography.Title level={3}>{title ?? t('workbench.title')}</Typography.Title>
+      <Typography.Paragraph type="secondary">{description ?? t('workbench.description')}</Typography.Paragraph>
     </MotionPanel>
   );
 }

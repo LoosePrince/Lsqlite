@@ -1,6 +1,79 @@
+:root,
+[data-theme="light"] {
+  --app-text: #172033;
+  --app-bg: #e8eef7;
+  --app-bg-gradient-start: #f7faff;
+  --app-bg-gradient-end: #e8eef7;
+  --app-bg-accent: rgba(47, 111, 218, 0.16);
+  --surface-glass: rgba(255, 255, 255, 0.9);
+  --surface-panel: rgba(255, 255, 255, 0.76);
+  --surface-muted: #f6f9fd;
+  --surface-card: #fff;
+  --surface-chip: #f8fbff;
+  --surface-chip-hover: #eef6ff;
+  --surface-context: #f8fbff;
+  --surface-row-hover: #edf5ff;
+  --surface-selected: #edf5ff;
+  --border-soft: rgba(120, 139, 177, 0.24);
+  --border-card: rgba(120, 139, 177, 0.2);
+  --border-input: #d9e4f2;
+  --border-chip: #dde8f6;
+  --border-explorer: #dce6f2;
+  --border-empty: #b7c8df;
+  --text-muted: #617086;
+  --text-subtle: #6b7890;
+  --text-secondary: #758196;
+  --text-chip: #65748b;
+  --eyebrow-color: #1f5fbf;
+  --shadow-card: 0 18px 50px rgba(32, 58, 94, 0.08);
+  --shadow-explorer-active: 0 10px 30px rgba(47, 111, 218, 0.12);
+  --shadow-login: 0 30px 90px rgba(0, 0, 0, 0.28);
+  --login-gradient-a: rgba(23, 32, 51, 0.9);
+  --login-gradient-b: rgba(31, 95, 191, 0.82);
+  --login-gradient-accent: rgba(255, 255, 255, 0.28);
+  --code-bg: #111827;
+  --code-text: #dceafe;
+}
+
+[data-theme="dark"] {
+  --app-text: #e8edf5;
+  --app-bg: #0f1419;
+  --app-bg-gradient-start: #151b24;
+  --app-bg-gradient-end: #0f1419;
+  --app-bg-accent: rgba(47, 111, 218, 0.22);
+  --surface-glass: rgba(21, 27, 36, 0.92);
+  --surface-panel: rgba(21, 27, 36, 0.82);
+  --surface-muted: #121820;
+  --surface-card: #171d27;
+  --surface-chip: #1a2230;
+  --surface-chip-hover: #1f2a3d;
+  --surface-context: #1a2230;
+  --surface-row-hover: #1f2a3d;
+  --surface-selected: #243247;
+  --border-soft: rgba(120, 139, 177, 0.18);
+  --border-card: rgba(120, 139, 177, 0.16);
+  --border-input: #2a3547;
+  --border-chip: #2a3547;
+  --border-explorer: #2a3547;
+  --border-empty: #3a4a61;
+  --text-muted: #9aa8bc;
+  --text-subtle: #8b97ab;
+  --text-secondary: #7f8da3;
+  --text-chip: #9aa8bc;
+  --eyebrow-color: #7eb0ff;
+  --shadow-card: 0 18px 50px rgba(0, 0, 0, 0.28);
+  --shadow-explorer-active: 0 10px 30px rgba(47, 111, 218, 0.2);
+  --shadow-login: 0 30px 90px rgba(0, 0, 0, 0.45);
+  --login-gradient-a: rgba(8, 12, 18, 0.96);
+  --login-gradient-b: rgba(20, 48, 96, 0.88);
+  --login-gradient-accent: rgba(126, 176, 255, 0.12);
+  --code-bg: #0b1018;
+  --code-text: #c7dcff;
+}
+
 :root {
-  color: #172033;
-  background: #e8eef7;
+  color: var(--app-text);
+  background: var(--app-bg);
   font-family: Outfit, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
   font-synthesis: none;
@@ -16,8 +89,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(47, 111, 218, 0.16), transparent 34rem),
-    linear-gradient(180deg, #f7faff 0%, #e8eef7 100%);
+    radial-gradient(circle at top left, var(--app-bg-accent), transparent 34rem),
+    linear-gradient(180deg, var(--app-bg-gradient-start) 0%, var(--app-bg-gradient-end) 100%);
 }
 
 button,
@@ -37,14 +110,20 @@ select {
 
 .login-shell {
   background:
-    linear-gradient(135deg, rgba(23, 32, 51, 0.9), rgba(31, 95, 191, 0.82)),
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.28), transparent 28rem);
+    linear-gradient(135deg, var(--login-gradient-a), var(--login-gradient-b)),
+    radial-gradient(circle at 20% 20%, var(--login-gradient-accent), transparent 28rem);
 }
 
 .login-card-pro {
   width: min(460px, calc(100vw - 2rem));
   border: 0;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-login);
+}
+
+.login-preferences {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
 }
 
 .login-card-pro .ant-card-body {
@@ -54,7 +133,7 @@ select {
 .eyebrow {
   display: inline-flex;
   margin-bottom: 0.25rem;
-  color: #1f5fbf;
+  color: var(--eyebrow-color);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -77,8 +156,8 @@ select {
   gap: 1rem;
   min-height: 74px;
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid rgba(120, 139, 177, 0.24);
-  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-glass);
   backdrop-filter: blur(18px);
 }
 
@@ -99,9 +178,9 @@ select {
   align-items: center;
   gap: 0.55rem;
   padding: 0.58rem 0.75rem;
-  border: 1px solid #d9e4f2;
+  border: 1px solid var(--border-input);
   border-radius: 12px;
-  background: #f8fbff;
+  background: var(--surface-context);
   overflow: hidden;
 }
 
@@ -115,7 +194,7 @@ select {
 
 .context-table,
 .admin-name {
-  color: #617086;
+  color: var(--text-muted);
   font-weight: 600;
 }
 
@@ -133,8 +212,8 @@ select {
 
 .desktop-explorer {
   min-height: calc(100vh - 74px);
-  border-right: 1px solid rgba(120, 139, 177, 0.24);
-  background: #f6f9fd;
+  border-right: 1px solid var(--border-soft);
+  background: var(--surface-muted);
 }
 
 .db-explorer {
@@ -177,15 +256,15 @@ select {
 }
 
 .explorer-db {
-  border: 1px solid #dce6f2;
+  border: 1px solid var(--border-explorer);
   border-radius: 14px;
-  background: #fff;
+  background: var(--surface-card);
   overflow: hidden;
 }
 
 .explorer-db.is-active {
   border-color: #2f6fda;
-  box-shadow: 0 10px 30px rgba(47, 111, 218, 0.12);
+  box-shadow: var(--shadow-explorer-active);
 }
 
 .explorer-db-button,
@@ -216,7 +295,7 @@ select {
 
 .db-subtitle {
   grid-column: 1 / -1;
-  color: #6b7890;
+  color: var(--text-subtle);
   font-size: 0.82rem;
 }
 
@@ -235,7 +314,7 @@ select {
 
 .explorer-table:hover,
 .explorer-table.is-active {
-  background: #edf5ff;
+  background: var(--surface-row-hover);
 }
 
 .explorer-table span {
@@ -244,7 +323,7 @@ select {
 
 .explorer-table small,
 .table-empty {
-  color: #758196;
+  color: var(--text-secondary);
 }
 
 .workspace-shell {
@@ -256,7 +335,7 @@ select {
 .workspace-tabs {
   margin-bottom: 0.8rem;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--surface-panel);
   padding: 0 0.8rem;
 }
 
@@ -273,8 +352,8 @@ select {
 }
 
 .admin-card {
-  border: 1px solid rgba(120, 139, 177, 0.2);
-  box-shadow: 0 18px 50px rgba(32, 58, 94, 0.08);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-card);
 }
 
 .compact-card .ant-card-body {
@@ -307,23 +386,23 @@ select {
   display: grid;
   gap: 0.25rem;
   padding: 0.72rem;
-  border: 1px solid #dde8f6;
+  border: 1px solid var(--border-chip);
   border-radius: 12px;
-  background: #f8fbff;
+  background: var(--surface-chip);
 }
 
 .table-chip:hover {
   border-color: #2f6fda;
-  background: #eef6ff;
+  background: var(--surface-chip-hover);
 }
 
 .table-chip span {
-  color: #65748b;
+  color: var(--text-chip);
   font-size: 0.86rem;
 }
 
 .selected-row > td {
-  background: #edf5ff !important;
+  background: var(--surface-selected) !important;
 }
 
 .section-spacer {
@@ -342,8 +421,8 @@ select {
 .inline-sql,
 .code-panel pre {
   border-radius: 12px;
-  background: #111827;
-  color: #dceafe;
+  background: var(--code-bg);
+  color: var(--code-text);
   padding: 0.85rem;
 }
 
@@ -424,9 +503,9 @@ select {
   place-items: center;
   align-content: center;
   gap: 0.4rem;
-  border: 1px dashed #b7c8df;
+  border: 1px dashed var(--border-empty);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--surface-panel);
   text-align: center;
 }
 
@@ -440,7 +519,7 @@ select {
   width: min(88vw, 360px);
   height: 100vh;
   overflow: auto;
-  background: #f7faff;
+  background: var(--app-bg-gradient-start);
 }
 
 .mobile-resource-head {
@@ -452,8 +531,8 @@ select {
   justify-content: space-between;
   gap: 0.8rem;
   padding: 0.9rem 1rem;
-  border-bottom: 1px solid #dde8f6;
-  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid var(--border-chip);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
 }
 

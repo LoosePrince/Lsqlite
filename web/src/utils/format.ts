@@ -1,4 +1,5 @@
 import type { ManagedDatabase } from '../api.js';
+import type { Locale } from '../i18n/types.js';
 
 export function formatBytes(value: number | null | undefined) {
   const size = Number(value || 0);
@@ -7,15 +8,11 @@ export function formatBytes(value: number | null | undefined) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function formatDate(value: string | null | undefined) {
-  if (!value) return '无';
+export function formatDate(value: string | null | undefined, noneLabel = '—', locale: Locale = 'zh') {
+  if (!value) return noneLabel;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-export function statusText(status: ManagedDatabase['status']) {
-  return ({ active: '可用', disabled: '已禁用', deleted: '已删除' } as const)[status];
+  return date.toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US');
 }
 
 export function statusColor(status: ManagedDatabase['status']) {

@@ -6,6 +6,7 @@ export function confirmDanger(input: {
   title: string;
   content: string;
   okText?: string;
+  cancelText?: string;
   notice?: NoticeApi;
   action?: string;
   onOk: () => Promise<void> | void;
@@ -13,9 +14,9 @@ export function confirmDanger(input: {
   Modal.confirm({
     title: input.title,
     content: input.content,
-    okText: input.okText || '确认',
+    okText: input.okText || input.title,
     okButtonProps: { danger: true },
-    cancelText: '取消',
+    cancelText: input.cancelText || 'Cancel',
     centered: true,
     onOk: async () => {
       if (input.notice) beginOperation(input.notice);

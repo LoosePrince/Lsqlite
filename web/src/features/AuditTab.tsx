@@ -2,12 +2,15 @@ import { Button, Card, Table, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { api, type AuditLog, type ManagedDatabase } from '../api.js';
 import { MotionPanel } from '../components/MotionPanel.js';
+import { useI18n } from '../i18n/context.js';
 import type { NoticeApi } from '../types.js';
 import { formatDate } from '../utils/format.js';
 
 export function AuditTab({ database, notice }: { database: ManagedDatabase; notice: NoticeApi }) {
+  const { t, locale } = useI18n();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const noneLabel = t('common.none');
 
   async function refresh() {
     setLoading(true);
@@ -15,7 +18,7 @@ export function AuditTab({ database, notice }: { database: ManagedDatabase; noti
       const result = await api.auditLogs(database.id);
       setLogs(result.logs);
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '读取审计日志失败');
+      notice.error(error instanceof Error ? error.message : t('audit.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -29,10 +32,10 @@ export function AuditTab({ database, notice }: { database: ManagedDatabase; noti
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">Audit</Typography.Text>
-          <Typography.Title level={3}>审计日志</Typography.Title>
+          <Typography.Text className="eyebrow">{t('tabs.audit')}</Typography.Text>
+          <Typography.Title level={3}>{t('audit.title')}</Typography.Title>
         </div>
-        <Button onClick={refresh}>刷新</Button>
+        <Button onClick={refresh}>{t('common.refresh')}</Button>
       </div>
       <Card className="admin-card">
         <Table
@@ -42,10 +45,10 @@ export function AuditTab({ database, notice }: { database: ManagedDatabase; noti
           dataSource={logs}
           pagination={{ pageSize: 12 }}
           columns={[
-            { title: '时间', dataIndex: 'createdAt', render: (value: string) => formatDate(value), width: 190 },
-            { title: '操作者', dataIndex: 'actor', width: 130 },
-            { title: '动作', dataIndex: 'action', width: 210 },
-            { title: '详情', dataIndex: 'detail', render: (value: unknown) => <pre className="inline-json">{JSON.stringify(value, null, 2)}</pre> }
+            { title: t('common.time'), dataIndex: 'createdAt', render: (value: string) => formatDate(value, noneLabel, locale), width: 190 },
+            { title: t('common.actor'), dataIndex: 'actor', width: 130 },
+            { title: t('audit.action'), dataIndex: 'action', width: 210 },
+            { title: t('common.detail'), dataIndex: 'detail', render: (value: unknown) => <pre className="inline-json">{JSON.stringify(value, null, 2)}</pre> }
           ]}
         />
       </Card>

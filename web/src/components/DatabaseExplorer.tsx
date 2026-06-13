@@ -1,6 +1,7 @@
 import { Button, Empty, Input, Radio, Space, Spin, Typography } from 'antd';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { DatabaseStatus, ManagedDatabase } from '../api.js';
+import { useI18n } from '../i18n/context.js';
 import { StatusTag } from './StatusTag.js';
 import { databaseSubtitle } from '../utils/format.js';
 
@@ -27,19 +28,21 @@ export function DatabaseExplorer({
   onCreateDatabase: () => void;
   onRefresh: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <aside className="db-explorer">
       <div className="explorer-head">
         <div>
-          <Typography.Text className="eyebrow">Navigator</Typography.Text>
-          <Typography.Title level={4}>数据库</Typography.Title>
+          <Typography.Text className="eyebrow">{t('explorer.eyebrow')}</Typography.Text>
+          <Typography.Title level={4}>{t('explorer.title')}</Typography.Title>
         </div>
-        <Button type="primary" onClick={onCreateDatabase}>新建</Button>
+        <Button type="primary" onClick={onCreateDatabase}>{t('common.new')}</Button>
       </div>
 
       <Space.Compact className="explorer-search">
-        <Input.Search placeholder="搜索数据库、文件、备注" value={search} onChange={(event) => onSearchChange(event.target.value)} allowClear />
-        <Button onClick={onRefresh}>刷新</Button>
+        <Input.Search placeholder={t('explorer.searchPlaceholder')} value={search} onChange={(event) => onSearchChange(event.target.value)} allowClear />
+        <Button onClick={onRefresh}>{t('common.refresh')}</Button>
       </Space.Compact>
 
       <Radio.Group
@@ -50,16 +53,16 @@ export function DatabaseExplorer({
         optionType="button"
         buttonStyle="solid"
         options={[
-          { label: 'active', value: 'active' },
-          { label: 'disabled', value: 'disabled' },
-          { label: 'deleted', value: 'deleted' },
-          { label: 'all', value: 'all' }
+          { label: t('common.active'), value: 'active' },
+          { label: t('common.disabled'), value: 'disabled' },
+          { label: t('common.deleted'), value: 'deleted' },
+          { label: t('common.all'), value: 'all' }
         ]}
       />
 
       <div className="explorer-list">
         {loadingDatabases ? <Spin /> : null}
-        {!loadingDatabases && databases.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有数据库" /> : null}
+        {!loadingDatabases && databases.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('explorer.empty')} /> : null}
         <AnimatePresence initial={false}>
           {databases.map((database) => {
             const selected = selectedDatabaseId === database.id;

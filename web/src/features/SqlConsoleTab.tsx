@@ -5,19 +5,21 @@ import { api, type ManagedDatabase, type TableInfo } from '../api.js';
 import { CodeBlock } from '../components/CodeBlock.js';
 import { JsonEditor } from '../components/JsonEditor.js';
 import { MotionPanel } from '../components/MotionPanel.js';
+import { useI18n } from '../i18n/context.js';
 import type { NoticeApi, RowRecord } from '../types.js';
 import { prettyJson } from '../utils/json.js';
 import { valuePreview } from '../utils/format.js';
 
 export function SqlConsoleTab({ database, table, notice }: { database: ManagedDatabase; table: TableInfo | null; notice: NoticeApi }) {
+  const { t } = useI18n();
   const tableName = table?.name || 'items';
   const examples = useMemo(() => [
-    { label: 'Schema', sql: "select name, type, sql from sqlite_schema where name not like 'sqlite_%' order by type, name;" },
-    { label: '分页查询', sql: `select * from ${tableName} limit 50;` },
-    { label: '插入', sql: `insert into ${tableName}(name) values ('demo');` },
-    { label: '更新', sql: `update ${tableName} set name = 'updated' where id = 1;` },
-    { label: '删除', sql: `delete from ${tableName} where id = 1;` }
-  ], [tableName]);
+    { label: t('common.schema'), sql: "select name, type, sql from sqlite_schema where name not like 'sqlite_%' order by type, name;" },
+    { label: t('sql.paginatedQuery'), sql: `select * from ${tableName} limit 50;` },
+    { label: t('common.insert'), sql: `insert into ${tableName}(name) values ('demo');` },
+    { label: t('common.update'), sql: `update ${tableName} set name = 'updated' where id = 1;` },
+    { label: t('common.delete'), sql: `delete from ${tableName} where id = 1;` }
+  ], [tableName, t]);
   const [sql, setSql] = useState(examples[0]?.sql || 'select 1;');
   const [results, setResults] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,9 +29,9 @@ export function SqlConsoleTab({ database, table, notice }: { database: ManagedDa
     try {
       const response = await api.query(database.id, sql);
       setResults(response.results);
-      notice.success('SQL 已执行');
+      notice.success(t('sql.executed'));
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : 'SQL 执行失败');
+      notice.error(error instanceof Error ? error.message : t('sql.failed'));
     } finally {
       setLoading(false);
     }
@@ -48,17 +50,17 @@ export function SqlConsoleTab({ database, table, notice }: { database: ManagedDa
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">SQL</Typography.Text>
-          <Typography.Title level={3}>SQL 控制台</Typography.Title>
+          <Typography.Text className="eyebrow">{t('tabs.sql')}</Typography.Text>
+          <Typography.Title level={3}>{t('sql.title')}</Typography.Title>
         </div>
         <Space wrap>
           <Select
             className="example-select"
-            placeholder="选择示例"
+            placeholder={t('sql.selectExample')}
             options={examples.map((item) => ({ label: item.label, value: item.sql }))}
             onChange={setSql}
           />
-          <Button type="primary" loading={loading} onClick={runSql}>执行 SQL</Button>
+          <Button type="primary" loading={loading} onClick={runSql}>{t('sql.runSql')}</Button>
         </Space>
       </div>
 
@@ -67,11 +69,11 @@ export function SqlConsoleTab({ database, table, notice }: { database: ManagedDa
       </Card>
 
       <div className="two-column-grid">
-        <Card title="表格结果预览" className="admin-card">
+        <Card title={t('sql.tablePreview')} className="admin-card">
           <Table rowKey={(_, index) => `sql-${index}`} size="small" dataSource={firstRows} columns={columns} pagination={{ pageSize: 10 }} scroll={{ x: 800 }} />
         </Card>
-        <Card title="原始结果" className="admin-card">
-          <CodeBlock value={results.length ? prettyJson(results) : '暂无结果'} />
+        <Card title={t('sql.rawResult')} className="admin-card">
+          <CodeBlock value={results.length ? prettyJson(results) : t('sql.noResult')} />
         </Card>
       </div>
     </MotionPanel>

@@ -13,27 +13,37 @@ import { OverviewTab } from '../features/OverviewTab.js';
 import { SqlConsoleTab } from '../features/SqlConsoleTab.js';
 import { StructureTab } from '../features/StructureTab.js';
 import { useAdminWorkspace } from '../hooks/useAdminWorkspace.js';
+import { useI18n } from '../i18n/context.js';
 import { AdminTopbar } from '../layouts/AdminTopbar.js';
 import { OperationDrawer } from '../layouts/OperationDrawer.js';
 import type { AdminUser, DrawerMode, NoticeApi, WorkspaceTab } from '../types.js';
 import { api } from '../api.js';
 import { StatusTag } from '../components/StatusTag.js';
-
-const tabItems: Array<{ key: WorkspaceTab; label: string }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'structure', label: 'Structure' },
-  { key: 'browse', label: 'Browse' },
-  { key: 'sql', label: 'SQL' },
-  { key: 'operations', label: 'Operations' },
-  { key: 'api', label: 'API Examples' },
-  { key: 'audit', label: 'Audit' }
-];
+import { notifyError } from '../utils/feedback.js';
 
 export function AdminDashboard({ admin, setAdmin, notice }: { admin: AdminUser; setAdmin: (admin: AdminUser | null) => void; notice: NoticeApi }) {
+  const { t } = useI18n();
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [rowRefreshSignal, setRowRefreshSignal] = useState(0);
-  const workspace = useAdminWorkspace({ onError: notice.error });
+
+  const tabItems = useMemo(() => ([
+    { key: 'overview' as const, label: t('tabs.overview') },
+    { key: 'structure' as const, label: t('tabs.structure') },
+    { key: 'browse' as const, label: t('tabs.browse') },
+    { key: 'sql' as const, label: t('tabs.sql') },
+    { key: 'operations' as const, label: t('tabs.operations') },
+    { key: 'api' as const, label: t('tabs.api') },
+    { key: 'audit' as const, label: t('tabs.audit') }
+  ]), [t]);
+
+  const workspace = useAdminWorkspace({
+    onError: (error, action) => notifyError(notice, action, error, t),
+    errors: {
+      loadDatabases: t('errors.loadDatabases'),
+      loadTables: t('errors.loadTables')
+    }
+  });
 
   const currentTab = useMemo(() => {
     if (!workspace.selectedDatabase) return null;
@@ -137,7 +147,7 @@ export function AdminDashboard({ admin, setAdmin, notice }: { admin: AdminUser; 
                 onChange={(key) => workspace.setActiveTab(key as WorkspaceTab)}
                 items={tabItems}
               />
-              <NavBar className="mobile-nav" back={null} right={<Button size="small" onClick={() => setMobileExplorerOpen(true)}>资源</Button>}>
+              <NavBar className="mobile-nav" back={null} right={<Button size="small" onClick={() => setMobileExplorerOpen(true)}>{t('common.resources')}</Button>}>
                 {workspace.selectedDatabase.name}
               </NavBar>
               <MobileTabs
@@ -146,7 +156,7 @@ export function AdminDashboard({ admin, setAdmin, notice }: { admin: AdminUser; 
                 onChange={(key) => workspace.setActiveTab(key as WorkspaceTab)}
               >
                 {tabItems.map((item) => (
-                  <MobileTabs.Tab key={item.key} title={item.label.replace(' Examples', '')} />
+                  <MobileTabs.Tab key={item.key} title={item.label} />
                 ))}
               </MobileTabs>
               <AnimatePresence mode="wait">{currentTab}</AnimatePresence>
@@ -171,8 +181,8 @@ export function AdminDashboard({ admin, setAdmin, notice }: { admin: AdminUser; 
 
       <Popup visible={mobileExplorerOpen} onMaskClick={() => setMobileExplorerOpen(false)} position="left" bodyClassName="mobile-resource-popup">
         <div className="mobile-resource-head">
-          <strong>数据库资源</strong>
-          <Button size="small" onClick={() => setDrawerMode('create-database')}>新建</Button>
+          <strong>{t('mobile.resources')}</strong>
+          <Button size="small" onClick={() => setDrawerMode('create-database')}>{t('common.new')}</Button>
         </div>
         <MobileList>
           {workspace.filteredDatabases.map((database) => (
@@ -189,11 +199,11 @@ export function AdminDashboard({ admin, setAdmin, notice }: { admin: AdminUser; 
           ))}
         </MobileList>
         {workspace.tables.length > 0 ? (
-          <MobileList header="当前数据库表">
+          <MobileList header={t('mobile.currentTables')}>
             {workspace.tables.map((table) => (
               <MobileList.Item
                 key={table.name}
-                description={`${table.type} · ${table.rowCount ?? '-'} rows`}
+                description={`${table.type} · ${table.rowCount ?? '-'} ${t('common.rows')}`}
                 onClick={() => {
                   workspace.selectTable(table.name, 'structure');
                   setMobileExplorerOpen(false);

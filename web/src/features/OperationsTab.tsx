@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { api, type DatabaseStatus, type ManagedDatabase } from '../api.js';
 import { MotionPanel } from '../components/MotionPanel.js';
 import { confirmDanger } from '../components/confirmDanger.js';
+import { useI18n } from '../i18n/context.js';
 import { beginOperation, notifyError, notifySuccess } from '../utils/feedback.js';
 import type { NoticeApi } from '../types.js';
 
@@ -15,6 +16,7 @@ export function OperationsTab({
   notice: NoticeApi;
   onRefreshDatabases: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [form] = Form.useForm<{ name: string; note: string; status: Exclude<DatabaseStatus, 'deleted'> }>();
 
   useEffect(() => {
@@ -29,10 +31,10 @@ export function OperationsTab({
     beginOperation(notice);
     try {
       await api.updateDatabase(database.id, values);
-      notifySuccess(notice, '数据库基础信息已更新');
+      notifySuccess(notice, t('operations.infoUpdated'));
       await onRefreshDatabases();
     } catch (error) {
-      notifyError(notice, '保存数据库基础信息', error);
+      notifyError(notice, t('operations.saveInfoAction'), error, t);
     }
   }
 
@@ -40,23 +42,24 @@ export function OperationsTab({
     beginOperation(notice);
     try {
       const response = await api.rotateKey(database.id);
-      Modal.success({ title: '新 key 已生成', content: response.key, centered: true });
+      Modal.success({ title: t('operations.keyRotated'), content: response.key, centered: true });
       await onRefreshDatabases();
     } catch (error) {
-      notifyError(notice, '轮换数据库 key', error);
+      notifyError(notice, t('operations.rotateKeyAction'), error, t);
     }
   }
 
   function softDelete() {
     confirmDanger({
-      title: `软删除 ${database.name}`,
-      content: '数据库会从默认列表隐藏，外部 key 立即不可用，SQLite 文件仍保留。',
-      okText: '软删除',
+      title: t('operations.softDeleteTitle', { name: database.name }),
+      content: t('operations.softDeleteContent'),
+      okText: t('operations.softDeleteOk'),
+      cancelText: t('common.cancel'),
       notice,
-      action: '软删除数据库',
+      action: t('operations.softDeleteAction'),
       onOk: async () => {
         await api.softDeleteDatabase(database.id);
-        notifySuccess(notice, `数据库 ${database.name} 已软删除`);
+        notifySuccess(notice, t('operations.softDeleted', { name: database.name }));
         await onRefreshDatabases();
       }
     });
@@ -66,30 +69,30 @@ export function OperationsTab({
     beginOperation(notice);
     try {
       await api.restoreDatabase(database.id);
-      notifySuccess(notice, `数据库 ${database.name} 已恢复`);
+      notifySuccess(notice, t('operations.restored', { name: database.name }));
       await onRefreshDatabases();
     } catch (error) {
-      notifyError(notice, '恢复数据库', error);
+      notifyError(notice, t('operations.restoreAction'), error, t);
     }
   }
 
   function permanentDelete() {
     let confirmName = '';
     Modal.confirm({
-      title: `永久删除 ${database.name}`,
+      title: t('operations.permanentDeleteTitle', { name: database.name }),
       content: (
         <div className="danger-confirm-content">
-          <Typography.Paragraph>此操作会删除元数据和 SQLite 文件。请输入数据库名称确认。</Typography.Paragraph>
+          <Typography.Paragraph>{t('operations.permanentDeleteContent')}</Typography.Paragraph>
           <Input placeholder={database.name} onChange={(event) => { confirmName = event.target.value; }} />
         </div>
       ),
-      okText: '永久删除',
+      okText: t('operations.permanentDeleteOk'),
       okButtonProps: { danger: true },
-      cancelText: '取消',
+      cancelText: t('common.cancel'),
       centered: true,
       onOk: async () => {
         await api.permanentlyDeleteDatabase(database.id, confirmName);
-        notice.success('数据库已永久删除');
+        notice.success(t('operations.permanentlyDeleted'));
         await onRefreshDatabases();
       }
     });
@@ -99,33 +102,35 @@ export function OperationsTab({
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">Operations</Typography.Text>
-          <Typography.Title level={3}>数据库操作</Typography.Title>
+          <Typography.Text className="eyebrow">{t('tabs.operations')}</Typography.Text>
+          <Typography.Title level={3}>{t('operations.title')}</Typography.Title>
         </div>
       </div>
 
       <div className="two-column-grid">
-        <Card title="基础信息" className="admin-card">
+        <Card title={t('operations.basicInfo')} className="admin-card">
           <Form form={form} layout="vertical" onFinish={save} disabled={database.status === 'deleted'} requiredMark={false}>
-            <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入数据库名称' }]}>
+            <Form.Item label={t('common.name')} name="name" rules={[{ required: true, message: t('operations.dbNameRequired') }]}>
               <Input />
             </Form.Item>
-            <Form.Item label="备注" name="note">
+            <Form.Item label={t('common.note')} name="note">
               <Input.TextArea rows={4} />
             </Form.Item>
-            <Form.Item label="状态" name="status">
-              <Select options={[{ label: 'active', value: 'active' }, { label: 'disabled', value: 'disabled' }]} />
+            <Form.Item label={t('common.status')} name="status">
+              <Select options={[{ label: t('common.active'), value: 'active' }, { label: t('common.disabled'), value: 'disabled' }]} />
             </Form.Item>
-            <Button type="primary" htmlType="submit">保存</Button>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
           </Form>
         </Card>
 
-        <Card title="敏感操作" className="admin-card danger-zone">
-          <Typography.Paragraph type="secondary">key 只在创建或轮换时展示，站点数据库只保存摘要。</Typography.Paragraph>
+        <Card title={t('operations.sensitiveOps')} className="admin-card danger-zone">
+          <Typography.Paragraph type="secondary">{t('operations.sensitiveHint')}</Typography.Paragraph>
           <Space wrap>
-            <Button disabled={database.status === 'deleted'} onClick={rotateKey}>轮换 key</Button>
-            {database.status === 'deleted' ? <Button type="primary" onClick={restore}>恢复数据库</Button> : <Button danger onClick={softDelete}>软删除</Button>}
-            <Button danger type="primary" onClick={permanentDelete}>永久删除</Button>
+            <Button disabled={database.status === 'deleted'} onClick={rotateKey}>{t('operations.rotateKey')}</Button>
+            {database.status === 'deleted'
+              ? <Button type="primary" onClick={restore}>{t('operations.restoreDatabase')}</Button>
+              : <Button danger onClick={softDelete}>{t('operations.softDelete')}</Button>}
+            <Button danger type="primary" onClick={permanentDelete}>{t('operations.permanentDelete')}</Button>
           </Space>
         </Card>
       </div>

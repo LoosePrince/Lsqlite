@@ -3,10 +3,14 @@ import { api, type DatabaseStatus, type ManagedDatabase, type TableInfo } from '
 import type { WorkspaceTab } from '../types.js';
 
 type UseAdminWorkspaceInput = {
-  onError: (message: string) => void;
+  onError: (error: unknown, action: string) => void;
+  errors: {
+    loadDatabases: string;
+    loadTables: string;
+  };
 };
 
-export function useAdminWorkspace({ onError }: UseAdminWorkspaceInput) {
+export function useAdminWorkspace({ onError, errors }: UseAdminWorkspaceInput) {
   const [databases, setDatabases] = useState<ManagedDatabase[]>([]);
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus | 'all'>('active');
   const [databaseSearch, setDatabaseSearch] = useState('');
@@ -47,12 +51,12 @@ export function useAdminWorkspace({ onError }: UseAdminWorkspaceInput) {
           return result.databases[0]?.id || null;
         });
       } catch (error) {
-        onError(error instanceof Error ? error.message : '读取数据库列表失败');
+        onError(error, errors.loadDatabases);
       } finally {
         setLoadingDatabases(false);
       }
     },
-    [databaseStatus, onError]
+    [databaseStatus, errors.loadDatabases, onError]
   );
 
   const refreshTables = useCallback(
@@ -73,12 +77,12 @@ export function useAdminWorkspace({ onError }: UseAdminWorkspaceInput) {
       } catch (error) {
         setTables([]);
         setSelectedTableName(null);
-        onError(error instanceof Error ? error.message : '读取表结构失败');
+        onError(error, errors.loadTables);
       } finally {
         setLoadingTables(false);
       }
     },
-    [onError, selectedDatabase?.id]
+    [errors.loadTables, onError, selectedDatabase?.id]
   );
 
   const selectDatabase = useCallback((databaseId: string) => {
