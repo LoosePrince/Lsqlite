@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lsqlite 简单博客 Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="#" data-action="set-view" data-view="feed" aria-label="返回博客首页">
+          <span class="brand-mark">B</span>
+          <span>
+            <strong>Blog Demo</strong>
+            <small>Lsqlite 数据后端</small>
+          </span>
+        </a>
+
+        <nav class="topnav" aria-label="主导航">
+          <button class="nav-button is-active" type="button" data-action="set-view" data-view="feed">博客</button>
+          <button class="nav-button" type="button" data-action="set-view" data-view="compose">发帖</button>
+          <button class="nav-button" type="button" data-action="set-view" data-view="admin">管理后台</button>
+        </nav>
+
+        <div id="connectionBadge" class="connection-badge is-pending">连接中</div>
+      </header>
+
+      <main id="viewRoot" class="view-root" aria-live="polite">
+        <section class="loading-card">
+          <div class="loader"></div>
+          <div>
+            <strong>正在连接服务</strong>
+            <p>初始化博客表结构并读取文章数据。</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
