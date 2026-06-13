@@ -1,37 +1,29 @@
 import { Button, Empty, Input, Radio, Space, Spin, Typography } from 'antd';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { DatabaseStatus, ManagedDatabase, TableInfo } from '../api.js';
+import type { DatabaseStatus, ManagedDatabase } from '../api.js';
 import { StatusTag } from './StatusTag.js';
 import { databaseSubtitle } from '../utils/format.js';
 
 export function DatabaseExplorer({
   databases,
-  tables,
   selectedDatabaseId,
-  selectedTableName,
   status,
   search,
   loadingDatabases,
-  loadingTables,
   onStatusChange,
   onSearchChange,
   onSelectDatabase,
-  onSelectTable,
   onCreateDatabase,
   onRefresh
 }: {
   databases: ManagedDatabase[];
-  tables: TableInfo[];
   selectedDatabaseId: string | null;
-  selectedTableName: string | null;
   status: DatabaseStatus | 'all';
   search: string;
   loadingDatabases: boolean;
-  loadingTables: boolean;
   onStatusChange: (status: DatabaseStatus | 'all') => void;
   onSearchChange: (value: string) => void;
   onSelectDatabase: (id: string) => void;
-  onSelectTable: (name: string) => void;
   onCreateDatabase: () => void;
   onRefresh: () => void;
 }) {
@@ -85,24 +77,6 @@ export function DatabaseExplorer({
                   <StatusTag status={database.status} />
                   <span className="db-subtitle">{databaseSubtitle(database)}</span>
                 </button>
-
-                {selected ? (
-                  <motion.div className="explorer-table-list" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}>
-                    {loadingTables ? <Spin size="small" /> : null}
-                    {!loadingTables && tables.length === 0 ? <span className="table-empty">暂无表</span> : null}
-                    {tables.map((table) => (
-                      <button
-                        key={table.name}
-                        type="button"
-                        className={`explorer-table ${selectedTableName === table.name ? 'is-active' : ''}`}
-                        onClick={() => onSelectTable(table.name)}
-                      >
-                        <span>{table.name}</span>
-                        <small>{table.type} · {table.rowCount ?? '-'} rows</small>
-                      </button>
-                    ))}
-                  </motion.div>
-                ) : null}
               </motion.div>
             );
           })}

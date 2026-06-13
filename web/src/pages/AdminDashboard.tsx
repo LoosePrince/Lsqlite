@@ -100,21 +100,14 @@ export function AdminDashboard({ admin, setAdmin, notice }: { admin: AdminUser; 
   const explorer = (
     <DatabaseExplorer
       databases={workspace.filteredDatabases}
-      tables={workspace.tables}
       selectedDatabaseId={workspace.selectedDatabase?.id || null}
-      selectedTableName={workspace.selectedTableName}
       status={workspace.databaseStatus}
       search={workspace.databaseSearch}
       loadingDatabases={workspace.loadingDatabases}
-      loadingTables={workspace.loadingTables}
       onStatusChange={(value: DatabaseStatus | 'all') => workspace.setDatabaseStatus(value)}
       onSearchChange={workspace.setDatabaseSearch}
       onSelectDatabase={(id) => {
         workspace.selectDatabase(id);
-        setMobileExplorerOpen(false);
-      }}
-      onSelectTable={(name) => {
-        workspace.selectTable(name, 'structure');
         setMobileExplorerOpen(false);
       }}
       onCreateDatabase={() => setDrawerMode('create-database')}

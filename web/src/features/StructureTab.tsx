@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, type ColumnInput, type ManagedDatabase, type TableInfo } from '../api.js';
 import { JsonEditor } from '../components/JsonEditor.js';
 import { MotionPanel } from '../components/MotionPanel.js';
-import { TablePicker } from '../components/TablePicker.js';
 import { confirmDanger } from '../components/confirmDanger.js';
 import type { NoticeApi } from '../types.js';
 import { beginOperation, notifyError, notifySuccess } from '../utils/feedback.js';
@@ -179,7 +178,6 @@ export function StructureTab({
         <Card
           title={selectedTable ? `表：${selectedTable.name}` : '未选择表'}
           className="admin-card"
-          extra={<TablePicker tables={tables} selectedTableName={selectedTableName} onSelect={onSelectTable} />}
         >
           <Typography.Title level={5}>字段</Typography.Title>
           <Table rowKey="name" size="small" dataSource={selectedTable?.columns || []} columns={columnColumns} pagination={false} scroll={{ x: 720 }} />
