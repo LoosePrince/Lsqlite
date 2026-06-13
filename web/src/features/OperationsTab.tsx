@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { api, type DatabaseStatus, type ManagedDatabase } from '../api.js';
 import { MotionPanel } from '../components/MotionPanel.js';
 import { confirmDanger } from '../components/confirmDanger.js';
+import { beginOperation, notifyError, notifySuccess } from '../utils/feedback.js';
 import type { NoticeApi } from '../types.js';
 
 export function OperationsTab({
@@ -25,22 +26,24 @@ export function OperationsTab({
   }, [database, form]);
 
   async function save(values: { name: string; note: string; status: Exclude<DatabaseStatus, 'deleted'> }) {
+    beginOperation(notice);
     try {
       await api.updateDatabase(database.id, values);
-      notice.success('数据库基础信息已更新');
+      notifySuccess(notice, '数据库基础信息已更新');
       await onRefreshDatabases();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '保存失败');
+      notifyError(notice, '保存数据库基础信息', error);
     }
   }
 
   async function rotateKey() {
+    beginOperation(notice);
     try {
       const response = await api.rotateKey(database.id);
       Modal.success({ title: '新 key 已生成', content: response.key, centered: true });
       await onRefreshDatabases();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '轮换 key 失败');
+      notifyError(notice, '轮换数据库 key', error);
     }
   }
 
@@ -49,21 +52,24 @@ export function OperationsTab({
       title: `软删除 ${database.name}`,
       content: '数据库会从默认列表隐藏，外部 key 立即不可用，SQLite 文件仍保留。',
       okText: '软删除',
+      notice,
+      action: '软删除数据库',
       onOk: async () => {
         await api.softDeleteDatabase(database.id);
-        notice.success('数据库已软删除');
+        notifySuccess(notice, `数据库 ${database.name} 已软删除`);
         await onRefreshDatabases();
       }
     });
   }
 
   async function restore() {
+    beginOperation(notice);
     try {
       await api.restoreDatabase(database.id);
-      notice.success('数据库已恢复');
+      notifySuccess(notice, `数据库 ${database.name} 已恢复`);
       await onRefreshDatabases();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '恢复失败');
+      notifyError(notice, '恢复数据库', error);
     }
   }
 

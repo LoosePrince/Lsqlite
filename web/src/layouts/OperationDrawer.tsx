@@ -1,7 +1,7 @@
 import { Button, Checkbox, Drawer, Form, Input, Modal, Select } from 'antd';
 import { api, type ColumnInput, type ManagedDatabase, type TableInfo } from '../api.js';
 import { JsonEditor } from '../components/JsonEditor.js';
-import type { DrawerMode, NoticeApi } from '../types.js';
+import { beginOperation, notifyError, notifySuccess } from '../utils/feedback.js';
 import { parseJsonArray, parseJsonObject } from '../utils/json.js';
 
 const columnTypes = ['integer', 'real', 'text', 'blob', 'numeric', 'boolean', 'datetime'].map((value) => ({ label: value, value }));
@@ -36,6 +36,8 @@ export function OperationDrawer({
   }
 
   async function submit(values: Record<string, unknown>) {
+    const action = drawerAction(mode);
+    beginOperation(notice);
     try {
       if (mode === 'create-database') {
         const result = await api.createDatabase({
@@ -43,7 +45,7 @@ export function OperationDrawer({
           key: values.key ? String(values.key) : undefined,
           note: values.note ? String(values.note) : undefined
         });
-        Modal.success({ title: '数据库已创建', content: `key：${result.key}`, centered: true });
+        Modal.success({ title: '数据库已创建', content: `访问 key：${result.key}`, centered: true });
         await onRefreshDatabases();
         onDatabaseCreated(result.database.id);
       }
@@ -51,33 +53,33 @@ export function OperationDrawer({
       if (mode === 'create-table' && database) {
         const columns = parseJsonArray<ColumnInput>(String(values.columns || '[]'), '字段定义');
         await api.createTable(database.id, { name: String(values.name || ''), columns, ifNotExists: Boolean(values.ifNotExists) });
-        notice.success('表已创建');
+        notifySuccess(notice, `表 ${String(values.name || '')} 已创建`);
         await onRefreshTables();
       }
 
       if (mode === 'add-column' && database && table) {
         await api.addColumn(database.id, table.name, values as ColumnInput);
-        notice.success('字段已添加');
+        notifySuccess(notice, `字段 ${String(values.name || '')} 已添加`);
         await onRefreshTables();
       }
 
       if (mode === 'create-index' && database && table) {
         const columns = String(values.columns || '').split(',').map((item) => item.trim()).filter(Boolean);
         await api.createIndex(database.id, table.name, { name: String(values.name || ''), columns, unique: Boolean(values.unique) });
-        notice.success('索引已创建');
+        notifySuccess(notice, `索引 ${String(values.name || '')} 已创建`);
         await onRefreshTables();
       }
 
       if (mode === 'insert-row' && database && table) {
         const row = parseJsonObject(String(values.values || '{}'), '行数据');
         await api.insertRow(database.id, table.name, row);
-        notice.success('行已插入');
+        notifySuccess(notice, `已向 ${table.name} 插入 1 行数据`);
         onRowsChanged();
       }
 
       close();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '操作失败');
+      notifyError(notice, action, error);
     }
   }
 
@@ -135,6 +137,17 @@ export function OperationDrawer({
 
 function JsonField({ value, onChange, rows }: { value?: string; onChange?: (value: string) => void; rows: number }) {
   return <JsonEditor value={value || ''} onChange={(next) => onChange?.(next)} rows={rows} />;
+}
+
+function drawerAction(mode: DrawerMode) {
+  return ({
+    'create-database': '创建数据库',
+    'create-table': '创建表',
+    'add-column': '添加字段',
+    'create-index': '创建索引',
+    'insert-row': '插入行数据',
+    'edit-row': '编辑行数据'
+  } as Record<Exclude<DrawerMode, null>, string>)[mode || 'create-database'];
 }
 
 function drawerTitle(mode: DrawerMode, table: TableInfo | null) {

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import request from 'supertest';
+import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
@@ -195,6 +196,63 @@ describe('Lsqlite API', () => {
     await agent.get(`/admin/databases/${id}/tables`).expect(200).expect((response) => {
       expect(response.body.tables).toEqual([]);
     });
+  });
+
+  it('repairs legacy audit foreign key references to databases_old', async () => {
+    store.close();
+
+    const legacyDb = new Database(path.join(root, 'site.sqlite'));
+    legacyDb.pragma('foreign_keys = OFF');
+    legacyDb.exec(`
+      alter table databases rename to databases_old;
+      create table databases (
+        id text primary key,
+        name text not null,
+        filename text not null unique,
+        path text not null unique,
+        key_hash text not null unique,
+        status text not null check (status in ('active', 'disabled', 'deleted')),
+        note text,
+        created_at text not null,
+        updated_at text not null,
+        last_access_at text,
+        deleted_at text
+      );
+      drop table databases_old;
+    `);
+    legacyDb.close();
+
+    const config: AppConfig = {
+      PORT: 3000,
+      SITE_DB_PATH: path.join(root, 'site.sqlite'),
+      DATA_DIR: path.join(root, 'dbs'),
+      ADMIN_USER: 'admin',
+      ADMIN_PASSWORD: 'password123',
+      SESSION_SECRET: 'test-secret-test-secret',
+      siteDbPath: path.join(root, 'site.sqlite'),
+      dataDir: path.join(root, 'dbs')
+    };
+    store = new SiteStore(config);
+    app = createApp({ config, store });
+
+    const agent = request.agent(app);
+    await agent.post('/admin/login').send({ username: 'admin', password: 'password123' }).expect(200);
+    const created = await agent.post('/admin/databases').send({ name: 'legacy repaired' }).expect(201);
+    const id = created.body.database.id as string;
+
+    await agent
+      .post(`/admin/databases/${id}/tables`)
+      .send({ name: 'items', columns: [{ name: 'id', type: 'integer', primaryKey: true }] })
+      .expect(201);
+
+    const checkDb = new Database(path.join(root, 'site.sqlite'), { readonly: true });
+    const auditDdl = checkDb.prepare("select sql from sqlite_schema where type = 'table' and name = 'audit_logs'").get() as { sql: string };
+    const oldTable = checkDb.prepare("select name from sqlite_schema where type = 'table' and name = 'databases_old'").get();
+    checkDb.close();
+
+    expect(auditDdl.sql).toContain('references databases(id)');
+    expect(auditDdl.sql).not.toContain('databases_old');
+    expect(oldTable).toBeUndefined();
   });
 
   it('returns database statistics and audit logs', async () => {

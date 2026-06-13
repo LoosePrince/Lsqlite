@@ -11,9 +11,19 @@ export function App() {
   const [messageApi, contextHolder] = message.useMessage();
 
   const notice = useMemo<NoticeApi>(() => ({
-    success: (content) => messageApi.success(content),
-    error: (content) => messageApi.error(content),
-    info: (content) => messageApi.info(content)
+    success: (content) => {
+      messageApi.destroy();
+      messageApi.success(content);
+    },
+    error: (content) => {
+      messageApi.destroy();
+      messageApi.error(content);
+    },
+    info: (content) => {
+      messageApi.destroy();
+      messageApi.info(content);
+    },
+    clear: () => messageApi.destroy()
   }), [messageApi]);
 
   useEffect(() => {

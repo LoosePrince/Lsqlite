@@ -4,6 +4,7 @@ export type NoticeApi = {
   success: (message: string) => void;
   error: (message: string) => void;
   info: (message: string) => void;
+  clear: () => void;
 };
 
 export type WorkspaceTab = 'overview' | 'structure' | 'browse' | 'sql' | 'operations' | 'api' | 'audit';

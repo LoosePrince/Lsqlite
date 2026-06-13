@@ -7,6 +7,7 @@ import { MotionPanel } from '../components/MotionPanel.js';
 import { TablePicker } from '../components/TablePicker.js';
 import { confirmDanger } from '../components/confirmDanger.js';
 import type { NoticeApi } from '../types.js';
+import { beginOperation, notifyError, notifySuccess } from '../utils/feedback.js';
 import { parseJsonArray, parseJsonObject } from '../utils/json.js';
 
 const typeOptions = ['integer', 'real', 'text', 'blob', 'numeric', 'boolean', 'datetime'].map((value) => ({ label: value, value }));
@@ -50,15 +51,15 @@ export function StructureTab({
   const columnColumns: ColumnsType<Record<string, unknown> & { name: string }> = [
     { title: '字段', dataIndex: 'name', fixed: 'left', width: 180 },
     { title: '类型', dataIndex: 'type', width: 130, render: (value) => String(value || '-') },
-    { title: 'Not Null', dataIndex: 'notnull', width: 110, render: (value) => value ? 'YES' : 'NO' },
+    { title: '非空', dataIndex: 'notnull', width: 110, render: (value) => value ? '是' : '否' },
     { title: '默认值', dataIndex: 'dflt_value', render: (value) => value === null || value === undefined ? '-' : String(value) },
-    { title: '主键', dataIndex: 'pk', width: 100, render: (value) => value ? 'YES' : 'NO' }
+    { title: '主键', dataIndex: 'pk', width: 100, render: (value) => value ? '是' : '否' }
   ];
 
   const indexColumns: ColumnsType<Record<string, unknown> & { name: string; columns?: unknown[] }> = [
     { title: '索引', dataIndex: 'name' },
     { title: '字段', dataIndex: 'columns', render: (value) => Array.isArray(value) ? value.join(', ') : '-' },
-    { title: '唯一', dataIndex: 'unique', width: 100, render: (value) => value ? 'YES' : 'NO' },
+    { title: '唯一', dataIndex: 'unique', width: 100, render: (value) => value ? '是' : '否' },
     {
       title: '操作',
       width: 120,
@@ -71,26 +72,28 @@ export function StructureTab({
   const tableRows = useMemo(() => tables.map((table) => ({ ...table, key: table.name })), [tables]);
 
   async function createTable(values: { name: string; columnsText: string }) {
+    beginOperation(notice);
     try {
       const columns = parseJsonArray<ColumnInput>(values.columnsText, '字段定义');
       await api.createTable(database.id, { name: values.name, columns });
-      notice.success('表已创建');
+      notifySuccess(notice, `表 ${values.name} 已创建`);
       setQuickTableOpen(false);
       await onRefreshTables();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '建表失败');
+      notifyError(notice, 'JSON 建表', error);
     }
   }
 
   async function addColumn(values: ColumnInput) {
     if (!selectedTableName) return;
+    beginOperation(notice);
     try {
       await api.addColumn(database.id, selectedTableName, values);
-      notice.success('字段已添加');
+      notifySuccess(notice, `字段 ${values.name} 已添加`);
       setQuickColumnOpen(false);
       await onRefreshTables();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '添加字段失败');
+      notifyError(notice, '快速添加字段', error);
     }
   }
 
@@ -100,9 +103,11 @@ export function StructureTab({
       title: `删除表 ${selectedTableName}`,
       content: '删除表会移除结构和数据，此操作不可从后台恢复。',
       okText: '删除表',
+      notice,
+      action: '删除表',
       onOk: async () => {
         await api.dropTable(database.id, selectedTableName, selectedTableName);
-        notice.success('表已删除');
+        notifySuccess(notice, `表 ${selectedTableName} 已删除`);
         await onRefreshTables();
       }
     });
@@ -114,9 +119,11 @@ export function StructureTab({
       title: `删除索引 ${indexName}`,
       content: '索引删除后可能影响查询性能，但不会删除表数据。',
       okText: '删除索引',
+      notice,
+      action: '删除索引',
       onOk: async () => {
         await api.dropIndex(database.id, selectedTableName, indexName);
-        notice.success('索引已删除');
+        notifySuccess(notice, `索引 ${indexName} 已删除`);
         await onRefreshTables();
       }
     });
@@ -124,13 +131,14 @@ export function StructureTab({
 
   async function createIndexFromJson(text: string) {
     if (!selectedTableName) return;
+    beginOperation(notice);
     try {
       const input = parseJsonObject(text, '索引定义') as { name: string; columns: string[]; unique?: boolean };
       await api.createIndex(database.id, selectedTableName, input);
-      notice.success('索引已创建');
+      notifySuccess(notice, `索引 ${input.name} 已创建`);
       await onRefreshTables();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '创建索引失败');
+      notifyError(notice, '创建索引', error);
     }
   }
 
@@ -138,7 +146,7 @@ export function StructureTab({
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">Structure</Typography.Text>
+          <Typography.Text className="eyebrow">结构</Typography.Text>
           <Typography.Title level={3}>表结构</Typography.Title>
         </div>
         <Space wrap>

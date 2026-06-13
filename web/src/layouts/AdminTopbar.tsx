@@ -1,7 +1,7 @@
 import { Button, Space, Typography } from 'antd';
-import type { AdminUser } from '../types.js';
 import type { ManagedDatabase, TableInfo } from '../api.js';
 import { StatusTag } from '../components/StatusTag.js';
+import type { AdminUser } from '../types.js';
 
 export function AdminTopbar({
   admin,
@@ -23,7 +23,7 @@ export function AdminTopbar({
       <Button className="mobile-only" onClick={onOpenMobileExplorer}>资源</Button>
       <div className="brand-block">
         <Typography.Text className="eyebrow">Lsqlite Admin</Typography.Text>
-        <Typography.Title level={3}>专业数据库管理台</Typography.Title>
+        <Typography.Title level={3}>数据库管理台</Typography.Title>
       </div>
       <div className="context-block">
         {database ? (

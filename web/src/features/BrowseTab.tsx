@@ -9,6 +9,7 @@ import { confirmDanger } from '../components/confirmDanger.js';
 import type { NoticeApi, RowRecord } from '../types.js';
 import { parseJsonObject, prettyJson } from '../utils/json.js';
 import { primaryWhere, tableColumns, writableValues } from '../utils/schema.js';
+import { beginOperation, notifyError, notifySuccess } from '../utils/feedback.js';
 import { valuePreview } from '../utils/format.js';
 
 export function BrowseTab({
@@ -57,7 +58,7 @@ export function BrowseTab({
         setRowsResult(result.result);
         setOffset(nextOffset);
       } catch (error) {
-        notice.error(error instanceof Error ? error.message : '读取行数据失败');
+        notifyError(notice, '读取行数据', error);
       } finally {
         setLoading(false);
       }
@@ -101,16 +102,17 @@ export function BrowseTab({
 
   async function updateRow() {
     if (!selectedTableName) return;
+    beginOperation(notice);
     try {
       await api.updateRows(database.id, selectedTableName, {
         values: parseJsonObject(valuesText, '更新值'),
         where: parseJsonObject(whereText, '更新条件')
       });
-      notice.success('行已更新');
+      notifySuccess(notice, '行数据已更新');
       setEditOpen(false);
       await refreshRows();
     } catch (error) {
-      notice.error(error instanceof Error ? error.message : '更新失败');
+      notifyError(notice, '更新行数据', error);
     }
   }
 
@@ -121,9 +123,11 @@ export function BrowseTab({
       title: '删除行',
       content: `将按条件删除：${JSON.stringify(where)}`,
       okText: '删除行',
+      notice,
+      action: '删除行数据',
       onOk: async () => {
         await api.deleteRows(database.id, selectedTableName, where);
-        notice.success('行已删除');
+        notifySuccess(notice, '行数据已删除');
         await refreshRows();
       }
     });
@@ -137,7 +141,7 @@ export function BrowseTab({
     <MotionPanel className="workspace-panel">
       <div className="section-title-row">
         <div>
-          <Typography.Text className="eyebrow">Browse</Typography.Text>
+          <Typography.Text className="eyebrow">浏览</Typography.Text>
           <Typography.Title level={3}>数据浏览</Typography.Title>
         </div>
         <Space wrap>
@@ -158,10 +162,10 @@ export function BrowseTab({
             onChange={setOrderBy}
             options={visibleColumns.map((name) => ({ label: name, value: name }))}
           />
-          <Select className="mini-select" value={order} onChange={setOrder} options={[{ label: 'DESC', value: 'desc' }, { label: 'ASC', value: 'asc' }]} />
+          <Select className="mini-select" value={order} onChange={setOrder} options={[{ label: '降序', value: 'desc' }, { label: '升序', value: 'asc' }]} />
           <Button disabled={!canPrev} onClick={() => refreshRows(Math.max(0, offset - limit))}>上一页</Button>
           <Button disabled={!canNext} onClick={() => refreshRows(offset + limit)}>下一页</Button>
-          <Typography.Text type="secondary">{total} rows · offset {offset}</Typography.Text>
+          <Typography.Text type="secondary">共 {total} 行 · 偏移 {offset}</Typography.Text>
         </Space>
       </Card>
 
@@ -182,11 +186,11 @@ export function BrowseTab({
         <Typography.Text type="secondary">按 where 条件更新。请保持条件足够精确。</Typography.Text>
         <div className="modal-json-grid">
           <div>
-            <Typography.Title level={5}>values</Typography.Title>
+            <Typography.Title level={5}>更新值</Typography.Title>
             <JsonEditor value={valuesText} onChange={setValuesText} rows={10} />
           </div>
           <div>
-            <Typography.Title level={5}>where</Typography.Title>
+            <Typography.Title level={5}>更新条件</Typography.Title>
             <JsonEditor value={whereText} onChange={setWhereText} rows={10} />
           </div>
         </div>

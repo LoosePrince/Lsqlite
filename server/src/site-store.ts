@@ -196,9 +196,14 @@ export class SiteStore {
   }
 
   audit(input: { databaseId?: string | null; actor: string; action: string; detail?: unknown }) {
-    this.db
-      .prepare('insert into audit_logs (id, database_id, actor, action, detail, created_at) values (?, ?, ?, ?, ?, ?)')
-      .run(cryptoRandomId(), input.databaseId || null, input.actor, input.action, JSON.stringify(input.detail ?? null), nowIso());
+    try {
+      this.db
+        .prepare('insert into audit_logs (id, database_id, actor, action, detail, created_at) values (?, ?, ?, ?, ?, ?)')
+        .run(cryptoRandomId(), input.databaseId || null, input.actor, input.action, JSON.stringify(input.detail ?? null), nowIso());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[lsqlite] audit log write failed: ${message}`);
+    }
   }
 
   listAuditLogs(input: { databaseId?: string; limit?: number } = {}): AuditLogRecord[] {
@@ -274,6 +279,23 @@ export class SiteStore {
 
     this.addColumnIfMissing('databases', 'deleted_at', 'text');
     this.rebuildDatabasesStatusConstraintIfNeeded();
+    this.rebuildAuditLogsForeignKeyIfNeeded();
+    this.dropLegacyDatabasesTableIfPresent();
+  }
+
+  private tableExists(table: string) {
+    const row = this.db.prepare("select 1 from sqlite_schema where type = 'table' and name = ?").get(table);
+    return Boolean(row);
+  }
+
+  private withForeignKeysDisabled(action: () => void) {
+    const enabled = Number(this.db.pragma('foreign_keys', { simple: true })) === 1;
+    this.db.pragma('foreign_keys = OFF');
+    try {
+      action();
+    } finally {
+      this.db.pragma(`foreign_keys = ${enabled ? 'ON' : 'OFF'}`);
+    }
   }
 
   private addColumnIfMissing(table: string, column: string, definition: string) {
@@ -287,25 +309,57 @@ export class SiteStore {
     const ddl = this.db.prepare("select sql from sqlite_schema where type = 'table' and name = 'databases'").get() as { sql?: string } | undefined;
     if (ddl?.sql?.includes("'deleted'")) return;
 
-    this.db.exec(`
-      alter table databases rename to databases_old;
-      create table databases (
-        id text primary key,
-        name text not null,
-        filename text not null unique,
-        path text not null unique,
-        key_hash text not null unique,
-        status text not null check (status in ('active', 'disabled', 'deleted')),
-        note text,
-        created_at text not null,
-        updated_at text not null,
-        last_access_at text,
-        deleted_at text
-      );
-      insert into databases (id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at)
-      select id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at from databases_old;
-      drop table databases_old;
-    `);
+    this.withForeignKeysDisabled(() => {
+      this.db.exec(`
+        alter table databases rename to databases_old;
+        create table databases (
+          id text primary key,
+          name text not null,
+          filename text not null unique,
+          path text not null unique,
+          key_hash text not null unique,
+          status text not null check (status in ('active', 'disabled', 'deleted')),
+          note text,
+          created_at text not null,
+          updated_at text not null,
+          last_access_at text,
+          deleted_at text
+        );
+        insert into databases (id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at)
+        select id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at from databases_old;
+        drop table databases_old;
+      `);
+    });
+  }
+
+  private rebuildAuditLogsForeignKeyIfNeeded() {
+    const ddl = this.db.prepare("select sql from sqlite_schema where type = 'table' and name = 'audit_logs'").get() as { sql?: string } | undefined;
+    if (!ddl?.sql || !ddl.sql.includes('databases_old')) return;
+
+    this.withForeignKeysDisabled(() => {
+      this.db.exec(`
+        alter table audit_logs rename to audit_logs_old;
+        create table audit_logs (
+          id text primary key,
+          database_id text,
+          actor text not null,
+          action text not null,
+          detail text,
+          created_at text not null,
+          foreign key (database_id) references databases(id) on delete set null
+        );
+        insert into audit_logs (id, database_id, actor, action, detail, created_at)
+        select id, database_id, actor, action, detail, created_at from audit_logs_old;
+        drop table audit_logs_old;
+      `);
+    });
+  }
+
+  private dropLegacyDatabasesTableIfPresent() {
+    if (!this.tableExists('databases_old')) return;
+    this.withForeignKeysDisabled(() => {
+      this.db.exec('drop table databases_old');
+    });
   }
 
   private fromRow(row: unknown): ManagedDatabase {
