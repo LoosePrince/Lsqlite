@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type DatabaseStatus, type ManagedDatabase, type TableInfo } from '../api.js';
 import type { WorkspaceTab } from '../types.js';
 
@@ -11,6 +11,16 @@ type UseAdminWorkspaceInput = {
 };
 
 export function useAdminWorkspace({ onError, errors }: UseAdminWorkspaceInput) {
+  const onErrorRef = useRef(onError);
+  const errorsRef = useRef(errors);
+  const databaseStatusRef = useRef<DatabaseStatus | 'all'>('active');
+  const selectedDatabaseIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+    errorsRef.current = errors;
+  });
+
   const [databases, setDatabases] = useState<ManagedDatabase[]>([]);
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus | 'all'>('active');
   const [databaseSearch, setDatabaseSearch] = useState('');
@@ -40,50 +50,54 @@ export function useAdminWorkspace({ onError, errors }: UseAdminWorkspaceInput) {
     });
   }, [databases, databaseSearch]);
 
-  const refreshDatabases = useCallback(
-    async (nextStatus = databaseStatus) => {
-      setLoadingDatabases(true);
-      try {
-        const result = await api.listDatabases(nextStatus);
-        setDatabases(result.databases);
-        setSelectedDatabaseId((current) => {
-          if (current && result.databases.some((database) => database.id === current)) return current;
-          return result.databases[0]?.id || null;
-        });
-      } catch (error) {
-        onError(error, errors.loadDatabases);
-      } finally {
-        setLoadingDatabases(false);
-      }
-    },
-    [databaseStatus, errors.loadDatabases, onError]
-  );
+  useEffect(() => {
+    databaseStatusRef.current = databaseStatus;
+  }, [databaseStatus]);
 
-  const refreshTables = useCallback(
-    async (databaseId = selectedDatabase?.id || null) => {
-      if (!databaseId) {
-        setTables([]);
-        setSelectedTableName(null);
-        return;
-      }
-      setLoadingTables(true);
-      try {
-        const result = await api.tables(databaseId);
-        setTables(result.tables);
-        setSelectedTableName((current) => {
-          if (current && result.tables.some((table) => table.name === current)) return current;
-          return result.tables[0]?.name || null;
-        });
-      } catch (error) {
-        setTables([]);
-        setSelectedTableName(null);
-        onError(error, errors.loadTables);
-      } finally {
-        setLoadingTables(false);
-      }
-    },
-    [errors.loadTables, onError, selectedDatabase?.id]
-  );
+  useEffect(() => {
+    selectedDatabaseIdRef.current = selectedDatabase?.id || null;
+  }, [selectedDatabase?.id]);
+
+  const refreshDatabases = useCallback(async (nextStatus?: DatabaseStatus | 'all') => {
+    const status = nextStatus ?? databaseStatusRef.current;
+    setLoadingDatabases(true);
+    try {
+      const result = await api.listDatabases(status);
+      setDatabases(result.databases);
+      setSelectedDatabaseId((current) => {
+        if (current && result.databases.some((database) => database.id === current)) return current;
+        return result.databases[0]?.id || null;
+      });
+    } catch (error) {
+      onErrorRef.current(error, errorsRef.current.loadDatabases);
+    } finally {
+      setLoadingDatabases(false);
+    }
+  }, []);
+
+  const refreshTables = useCallback(async (databaseId?: string | null) => {
+    const id = databaseId ?? selectedDatabaseIdRef.current;
+    if (!id) {
+      setTables([]);
+      setSelectedTableName(null);
+      return;
+    }
+    setLoadingTables(true);
+    try {
+      const result = await api.tables(id);
+      setTables(result.tables);
+      setSelectedTableName((current) => {
+        if (current && result.tables.some((table) => table.name === current)) return current;
+        return result.tables[0]?.name || null;
+      });
+    } catch (error) {
+      setTables([]);
+      setSelectedTableName(null);
+      onErrorRef.current(error, errorsRef.current.loadTables);
+    } finally {
+      setLoadingTables(false);
+    }
+  }, []);
 
   const selectDatabase = useCallback((databaseId: string) => {
     setSelectedDatabaseId(databaseId);
