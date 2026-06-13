@@ -96,4 +96,124 @@ describe('Lsqlite API', () => {
 
     expect(isolated.body.results[0].rows).toEqual([]);
   });
+
+  it('manages database metadata, deletion lifecycle, and key accessibility', async () => {
+    const agent = request.agent(app);
+    await agent.post('/admin/login').send({ username: 'admin', password: 'password123' }).expect(200);
+
+    const created = await agent.post('/admin/databases').send({ name: 'lifecycle', note: 'first note' }).expect(201);
+    const id = created.body.database.id as string;
+    const key = created.body.key as string;
+    const filePath = created.body.database.absolutePath as string;
+
+    const updated = await agent.patch(`/admin/databases/${id}`).send({ name: 'lifecycle renamed', note: 'updated note', status: 'disabled' }).expect(200);
+    expect(updated.body.database).toMatchObject({ name: 'lifecycle renamed', note: 'updated note', status: 'disabled' });
+
+    await request(app)
+      .post('/api/query')
+      .set('Authorization', `Bearer ${key}`)
+      .send({ sql: 'select 1', mode: 'read' })
+      .expect(403);
+
+    await agent.patch(`/admin/databases/${id}`).send({ status: 'active' }).expect(200);
+    await agent.delete(`/admin/databases/${id}`).expect(200);
+
+    const deletedList = await agent.get('/admin/databases?status=deleted').expect(200);
+    expect(deletedList.body.databases).toHaveLength(1);
+    expect(deletedList.body.databases[0]).toMatchObject({ id, status: 'deleted' });
+
+    await request(app)
+      .post('/api/query')
+      .set('Authorization', `Bearer ${key}`)
+      .send({ sql: 'select 1', mode: 'read' })
+      .expect(403);
+
+    const restored = await agent.post(`/admin/databases/${id}/restore`).expect(200);
+    expect(restored.body.database.status).toBe('active');
+
+    await request(app)
+      .post('/api/query')
+      .set('Authorization', `Bearer ${key}`)
+      .send({ sql: 'select 1 as ok', mode: 'read' })
+      .expect(200);
+
+    await agent.delete(`/admin/databases/${id}/permanent`).send({ confirmName: 'wrong name' }).expect(400);
+    await agent.delete(`/admin/databases/${id}/permanent`).send({ confirmName: 'lifecycle renamed' }).expect(200);
+
+    const allList = await agent.get('/admin/databases?status=all').expect(200);
+    expect(allList.body.databases.some((database: { id: string }) => database.id === id)).toBe(false);
+    expect(fs.existsSync(filePath)).toBe(false);
+  });
+
+  it('manages table schema and table rows through admin APIs', async () => {
+    const agent = request.agent(app);
+    await agent.post('/admin/login').send({ username: 'admin', password: 'password123' }).expect(200);
+
+    const created = await agent.post('/admin/databases').send({ name: 'managed' }).expect(201);
+    const id = created.body.database.id as string;
+
+    const table = await agent
+      .post(`/admin/databases/${id}/tables`)
+      .send({
+        name: 'items',
+        columns: [
+          { name: 'id', type: 'integer', primaryKey: true },
+          { name: 'name', type: 'text', notNull: true }
+        ]
+      })
+      .expect(201);
+    expect(table.body.table.name).toBe('items');
+
+    await agent.post(`/admin/databases/${id}/tables/items/columns`).send({ name: 'note', type: 'text' }).expect(201);
+    await agent.post(`/admin/databases/${id}/tables/items/indexes`).send({ name: 'idx_items_name', columns: ['name'] }).expect(201);
+
+    const tables = await agent.get(`/admin/databases/${id}/tables`).expect(200);
+    expect(tables.body.tables[0]).toMatchObject({ name: 'items', type: 'table', rowCount: 0 });
+    expect(tables.body.tables[0].columns.map((column: { name: string }) => column.name)).toContain('note');
+    expect(tables.body.tables[0].indexes.map((index: { name: string }) => index.name)).toContain('idx_items_name');
+
+    const inserted = await agent.post(`/admin/databases/${id}/tables/items/rows`).send({ values: { name: 'Ada', note: 'first' } }).expect(201);
+    expect(inserted.body.result.changes).toBe(1);
+
+    const rows = await agent.get(`/admin/databases/${id}/tables/items/rows?limit=10&offset=0&orderBy=id&order=desc`).expect(200);
+    expect(rows.body.result.total).toBe(1);
+    expect(rows.body.result.rows[0]).toMatchObject({ id: 1, name: 'Ada', note: 'first' });
+
+    await agent.patch(`/admin/databases/${id}/tables/items/rows`).send({ values: { note: 'updated' }, where: { id: 1 } }).expect(200);
+    const updated = await agent.get(`/admin/databases/${id}/tables/items/rows?limit=10&offset=0`).expect(200);
+    expect(updated.body.result.rows[0]).toMatchObject({ id: 1, note: 'updated' });
+
+    await agent.patch(`/admin/databases/${id}/tables/items/rows`).send({ values: { note: 'blocked' }, where: {} }).expect(400);
+    await agent.delete(`/admin/databases/${id}/tables/items/rows`).send({ where: {} }).expect(400);
+    await agent.delete(`/admin/databases/${id}/tables/items/rows`).send({ where: { id: 1 } }).expect(200);
+
+    const empty = await agent.get(`/admin/databases/${id}/tables/items/rows?limit=10&offset=0`).expect(200);
+    expect(empty.body.result.total).toBe(0);
+
+    await agent.delete(`/admin/databases/${id}/tables/items/indexes/idx_items_name`).expect(200);
+    await agent.delete(`/admin/databases/${id}/tables/items`).send({ confirmName: 'items' }).expect(200);
+    await agent.get(`/admin/databases/${id}/tables`).expect(200).expect((response) => {
+      expect(response.body.tables).toEqual([]);
+    });
+  });
+
+  it('returns database statistics and audit logs', async () => {
+    const agent = request.agent(app);
+    await agent.post('/admin/login').send({ username: 'admin', password: 'password123' }).expect(200);
+    const created = await agent.post('/admin/databases').send({ name: 'observable' }).expect(201);
+    const id = created.body.database.id as string;
+
+    await agent
+      .post(`/admin/databases/${id}/tables`)
+      .send({ name: 'events', columns: [{ name: 'id', type: 'integer', primaryKey: true }, { name: 'message', type: 'text' }] })
+      .expect(201);
+    await agent.post(`/admin/databases/${id}/tables/events/rows`).send({ values: { message: 'created' } }).expect(201);
+
+    const stats = await agent.get(`/admin/databases/${id}/stats`).expect(200);
+    expect(stats.body.stats.tableCount).toBe(1);
+    expect(stats.body.stats.rows).toEqual([{ name: 'events', rowCount: 1 }]);
+
+    const logs = await agent.get(`/admin/audit-logs?databaseId=${id}`).expect(200);
+    expect(logs.body.logs.map((log: { action: string }) => log.action)).toEqual(expect.arrayContaining(['database.create', 'table.create', 'table.row.insert']));
+  });
 });

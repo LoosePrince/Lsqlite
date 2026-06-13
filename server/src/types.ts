@@ -1,4 +1,4 @@
-export type DatabaseStatus = 'active' | 'disabled';
+export type DatabaseStatus = 'active' | 'disabled' | 'deleted';
 
 export type ManagedDatabase = {
   id: string;
@@ -11,6 +11,7 @@ export type ManagedDatabase = {
   createdAt: string;
   updatedAt: string;
   lastAccessAt: string | null;
+  deletedAt: string | null;
 };
 
 export type QueryMode = 'auto' | 'read' | 'write';

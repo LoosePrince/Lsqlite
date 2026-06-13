@@ -8,8 +8,42 @@ import type { AppConfig } from './config.js';
 import { SiteStore } from './site-store.js';
 import { clearSession, getSessionAdmin, readBearerToken, requireAdmin, setSessionAdmin } from './auth.js';
 import { asyncRoute, errorHandler, HttpError, notFound } from './http.js';
-import { createDatabaseSchema, loginSchema, querySchema, rotateKeySchema, transactionSchema, updateDatabaseSchema } from './schemas.js';
-import { executeSql, executeTransaction, getSchema } from './sqlite-service.js';
+import {
+  addColumn,
+  createIndex,
+  createTable,
+  deleteRows,
+  dropIndex,
+  dropTable,
+  executeSql,
+  executeTransaction,
+  getDatabaseStats,
+  getSchema,
+  getTable,
+  insertRow,
+  listTables,
+  queryRows,
+  updateRows
+} from './sqlite-service.js';
+import {
+  addColumnSchema,
+  auditQuerySchema,
+  createDatabaseSchema,
+  createIndexSchema,
+  createTableSchema,
+  databaseListQuerySchema,
+  deleteRowsSchema,
+  dropTableSchema,
+  insertRowSchema,
+  loginSchema,
+  permanentDeleteSchema,
+  querySchema,
+  rotateKeySchema,
+  rowsQuerySchema,
+  transactionSchema,
+  updateDatabaseSchema,
+  updateRowsSchema
+} from './schemas.js';
 import { safeCompare } from './utils.js';
 
 export type AppContext = {
@@ -67,8 +101,14 @@ export function createApp(context: AppContext) {
     response.json({ ok: true, admin: getSessionAdmin(request) });
   });
 
-  app.get('/admin/databases', requireAdmin, (_request, response) => {
-    response.json({ ok: true, databases: context.store.listDatabases() });
+  app.get('/admin/audit-logs', requireAdmin, (request, response) => {
+    const query = auditQuerySchema.parse(request.query);
+    response.json({ ok: true, logs: context.store.listAuditLogs(query) });
+  });
+
+  app.get('/admin/databases', requireAdmin, (request, response) => {
+    const query = databaseListQuerySchema.parse(request.query);
+    response.json({ ok: true, databases: context.store.listDatabases(query.status) });
   });
 
   app.post(
@@ -93,6 +133,37 @@ export function createApp(context: AppContext) {
     })
   );
 
+  app.delete(
+    '/admin/databases/:id',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.softDeleteDatabase(getRouteParam(request, 'id'));
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'database.soft_delete' });
+      response.json({ ok: true, database });
+    })
+  );
+
+  app.post(
+    '/admin/databases/:id/restore',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.restoreDatabase(getRouteParam(request, 'id'));
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'database.restore' });
+      response.json({ ok: true, database });
+    })
+  );
+
+  app.delete(
+    '/admin/databases/:id/permanent',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const body = permanentDeleteSchema.parse(request.body);
+      const database = context.store.permanentlyDeleteDatabase(getRouteParam(request, 'id'), body.confirmName);
+      context.store.audit({ actor: 'admin', action: 'database.permanent_delete', detail: { id: database.id, name: database.name } });
+      response.json({ ok: true, database });
+    })
+  );
+
   app.post(
     '/admin/databases/:id/rotate-key',
     requireAdmin,
@@ -110,6 +181,146 @@ export function createApp(context: AppContext) {
     asyncRoute((request, response) => {
       const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
       response.json({ ok: true, database: context.store.toPublic(database), schema: getSchema(database) });
+    })
+  );
+
+  app.get(
+    '/admin/databases/:id/stats',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      response.json({ ok: true, stats: getDatabaseStats(database) });
+    })
+  );
+
+  app.get(
+    '/admin/databases/:id/tables',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      response.json({ ok: true, tables: listTables(database) });
+    })
+  );
+
+  app.get(
+    '/admin/databases/:id/tables/:table',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      response.json({ ok: true, table: getTable(database, getRouteParam(request, 'table')) });
+    })
+  );
+
+  app.post(
+    '/admin/databases/:id/tables',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const body = createTableSchema.parse(request.body);
+      const table = createTable(database, body);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.create', detail: { table: body.name } });
+      response.status(201).json({ ok: true, table });
+    })
+  );
+
+  app.delete(
+    '/admin/databases/:id/tables/:table',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const body = dropTableSchema.parse(request.body);
+      const result = dropTable(database, tableName, body.confirmName);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.drop', detail: { table: tableName } });
+      response.json({ ok: true, result });
+    })
+  );
+
+  app.post(
+    '/admin/databases/:id/tables/:table/columns',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const body = addColumnSchema.parse(request.body);
+      const table = addColumn(database, tableName, body);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.column.add', detail: { table: tableName, column: body.name } });
+      response.status(201).json({ ok: true, table });
+    })
+  );
+
+  app.post(
+    '/admin/databases/:id/tables/:table/indexes',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const body = createIndexSchema.parse(request.body);
+      const table = createIndex(database, tableName, body);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.index.create', detail: { table: tableName, index: body.name } });
+      response.status(201).json({ ok: true, table });
+    })
+  );
+
+  app.delete(
+    '/admin/databases/:id/tables/:table/indexes/:index',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const indexName = getRouteParam(request, 'index');
+      const table = dropIndex(database, tableName, indexName);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.index.drop', detail: { table: tableName, index: indexName } });
+      response.json({ ok: true, table });
+    })
+  );
+
+  app.get(
+    '/admin/databases/:id/tables/:table/rows',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const query = rowsQuerySchema.parse(request.query);
+      response.json({ ok: true, result: queryRows(database, getRouteParam(request, 'table'), query) });
+    })
+  );
+
+  app.post(
+    '/admin/databases/:id/tables/:table/rows',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const body = insertRowSchema.parse(request.body);
+      const result = insertRow(database, tableName, body.values);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.row.insert', detail: { table: tableName } });
+      response.status(201).json({ ok: true, result });
+    })
+  );
+
+  app.patch(
+    '/admin/databases/:id/tables/:table/rows',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const body = updateRowsSchema.parse(request.body);
+      const result = updateRows(database, tableName, body);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.row.update', detail: { table: tableName, where: body.where } });
+      response.json({ ok: true, result });
+    })
+  );
+
+  app.delete(
+    '/admin/databases/:id/tables/:table/rows',
+    requireAdmin,
+    asyncRoute((request, response) => {
+      const database = context.store.getByIdRequired(getRouteParam(request, 'id'));
+      const tableName = getRouteParam(request, 'table');
+      const body = deleteRowsSchema.parse(request.body);
+      const result = deleteRows(database, tableName, body.where);
+      context.store.audit({ databaseId: database.id, actor: 'admin', action: 'table.row.delete', detail: { table: tableName, where: body.where } });
+      response.json({ ok: true, result });
     })
   );
 

@@ -12,6 +12,18 @@ curl -X POST "$LSQLITE_BASE_URL/api/query" \
   }'
 ```
 
+## 读取单表字段
+
+```bash
+curl -X POST "$LSQLITE_BASE_URL/api/query" \
+  -H "Authorization: Bearer $LSQLITE_DATABASE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "read",
+    "sql": "pragma table_info(notes)"
+  }'
+```
+
 ## 创建表
 
 ```json
@@ -21,7 +33,7 @@ curl -X POST "$LSQLITE_BASE_URL/api/query" \
 }
 ```
 
-## 插入数据
+## 参数绑定插入数据
 
 ```json
 {
@@ -31,13 +43,33 @@ curl -X POST "$LSQLITE_BASE_URL/api/query" \
 }
 ```
 
-## 查询数据
+## 分页查询数据
 
 ```json
 {
-  "sql": "select id, title, created_at from notes order by id desc limit ?",
-  "params": [20],
+  "sql": "select id, title, created_at from notes order by id desc limit ? offset ?",
+  "params": [20, 0],
   "mode": "read"
+}
+```
+
+## 参数绑定更新数据
+
+```json
+{
+  "sql": "update notes set title = ? where id = ?",
+  "params": ["更新后的标题", 1],
+  "mode": "write"
+}
+```
+
+## 参数绑定删除数据
+
+```json
+{
+  "sql": "delete from notes where id = ?",
+  "params": [1],
+  "mode": "write"
 }
 ```
 
@@ -48,14 +80,36 @@ curl -X POST "$LSQLITE_BASE_URL/api/query" \
   "statements": [
     {
       "sql": "insert into notes(title, body) values (?, ?)",
-      "params": ["事务笔记", "正文"]
+      "params": ["事务笔记", "正文"],
+      "mode": "write"
     },
     {
       "sql": "insert into audit_logs(message) values (?)",
-      "params": ["created note"]
+      "params": ["created note"],
+      "mode": "write"
     }
   ]
 }
+```
+
+## fetch 调用示例
+
+```js
+const response = await fetch(`${process.env.LSQLITE_BASE_URL}/api/query`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.LSQLITE_DATABASE_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    mode: 'read',
+    sql: 'select id, title from notes order by id desc limit ? offset ?',
+    params: [20, 0]
+  })
+});
+
+const payload = await response.json();
+const rows = payload.results[0].rows;
 ```
 
 ## 调用方 AI 提示词模板
@@ -66,6 +120,8 @@ curl -X POST "$LSQLITE_BASE_URL/api/query" \
 数据库 key：<LSQLITE_DATABASE_KEY>
 默认先读取 sqlite_schema 理解结构。
 所有用户输入都必须使用参数绑定。
+读取数据默认分页。
 写操作前说明影响范围并等待确认，除非用户已经明确要求执行。
 优先使用 SQLite SQL；MySQL/PostgreSQL 语法只使用 SQLite 可兼容部分。
+不要访问站点数据库、其他数据库文件或文件系统。
 ```

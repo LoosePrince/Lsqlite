@@ -6,6 +6,8 @@ import type { AppConfig } from './config.js';
 import type { DatabaseStatus, ManagedDatabase } from './types.js';
 import { nowIso, randomKey, sha256, toSlug } from './utils.js';
 
+export type DatabaseListStatus = DatabaseStatus | 'all';
+
 export type CreateDatabaseInput = {
   name: string;
   key?: string;
@@ -19,6 +21,16 @@ export type CreateDatabaseResult = {
 
 export type PublicDatabaseRecord = Omit<ManagedDatabase, 'path' | 'keyHash'> & {
   absolutePath: string;
+  fileSize: number;
+};
+
+export type AuditLogRecord = {
+  id: string;
+  databaseId: string | null;
+  actor: string;
+  action: string;
+  detail: unknown;
+  createdAt: string;
 };
 
 export class SiteStore {
@@ -45,7 +57,7 @@ export class SiteStore {
     const dbPath = this.resolveDatabasePath(filename);
     const key = input.key?.trim() || randomKey();
 
-    if (this.getByKey(key)) {
+    if (this.getByKey(key, { includeDeleted: true })) {
       throw Object.assign(new Error('database key already exists'), { status: 409 });
     }
 
@@ -54,8 +66,8 @@ export class SiteStore {
     this.db
       .prepare(
         `insert into databases (
-          id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at
-        ) values (?, ?, ?, ?, ?, 'active', ?, ?, ?, null)`
+          id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at
+        ) values (?, ?, ?, ?, ?, 'active', ?, ?, ?, null, null)`
       )
       .run(id, input.name.trim(), filename, dbPath, sha256(key), input.note?.trim() || null, now, now);
 
@@ -65,11 +77,12 @@ export class SiteStore {
     };
   }
 
-  listDatabases(): PublicDatabaseRecord[] {
-    return (this.db
-      .prepare('select * from databases order by created_at desc')
-      .all() as unknown[])
-      .map((row: unknown) => this.toPublic(this.fromRow(row)));
+  listDatabases(status: DatabaseListStatus = 'active'): PublicDatabaseRecord[] {
+    const rows = status === 'all'
+      ? (this.db.prepare('select * from databases order by created_at desc').all() as unknown[])
+      : (this.db.prepare('select * from databases where status = ? order by created_at desc').all(status) as unknown[]);
+
+    return rows.map((row: unknown) => this.toPublic(this.fromRow(row)));
   }
 
   getById(id: string): ManagedDatabase | null {
@@ -85,14 +98,21 @@ export class SiteStore {
     return found;
   }
 
-  getByKey(key: string): ManagedDatabase | null {
-    const row = this.db.prepare('select * from databases where key_hash = ?').get(sha256(key));
+  getByKey(key: string, options: { includeDeleted?: boolean } = {}): ManagedDatabase | null {
+    const row = options.includeDeleted
+      ? this.db.prepare('select * from databases where key_hash = ?').get(sha256(key))
+      : this.db.prepare("select * from databases where key_hash = ? and status != 'deleted'").get(sha256(key));
     return row ? this.fromRow(row) : null;
   }
 
   rotateKey(id: string, key?: string) {
+    const current = this.getByIdRequired(id);
+    if (current.status === 'deleted') {
+      throw Object.assign(new Error('deleted database cannot rotate key'), { status: 409 });
+    }
+
     const nextKey = key?.trim() || randomKey();
-    const existing = this.getByKey(nextKey);
+    const existing = this.getByKey(nextKey, { includeDeleted: true });
     if (existing && existing.id !== id) {
       throw Object.assign(new Error('database key already exists'), { status: 409 });
     }
@@ -106,8 +126,12 @@ export class SiteStore {
     return { database: this.toPublic(this.getByIdRequired(id)), key: nextKey };
   }
 
-  updateDatabase(id: string, input: { name?: string; note?: string | null; status?: DatabaseStatus }) {
+  updateDatabase(id: string, input: { name?: string; note?: string | null; status?: Exclude<DatabaseStatus, 'deleted'> }) {
     const current = this.getByIdRequired(id);
+    if (current.status === 'deleted') {
+      throw Object.assign(new Error('deleted database must be restored before editing'), { status: 409 });
+    }
+
     const next = {
       name: input.name?.trim() || current.name,
       note: input.note === undefined ? current.note : input.note?.trim() || null,
@@ -120,6 +144,53 @@ export class SiteStore {
     return this.toPublic(this.getByIdRequired(id));
   }
 
+  softDeleteDatabase(id: string) {
+    const current = this.getByIdRequired(id);
+    if (current.status === 'deleted') {
+      return this.toPublic(current);
+    }
+
+    const now = nowIso();
+    this.db
+      .prepare("update databases set status = 'deleted', deleted_at = ?, updated_at = ? where id = ?")
+      .run(now, now, id);
+    return this.toPublic(this.getByIdRequired(id));
+  }
+
+  restoreDatabase(id: string) {
+    const current = this.getByIdRequired(id);
+    if (current.status !== 'deleted') {
+      return this.toPublic(current);
+    }
+
+    const now = nowIso();
+    this.db
+      .prepare("update databases set status = 'active', deleted_at = null, updated_at = ? where id = ?")
+      .run(now, id);
+    return this.toPublic(this.getByIdRequired(id));
+  }
+
+  permanentlyDeleteDatabase(id: string, confirmName: string) {
+    const current = this.getByIdRequired(id);
+    if (confirmName !== current.name) {
+      throw Object.assign(new Error('database name confirmation does not match'), { status: 400 });
+    }
+
+    const dbPath = current.path;
+    this.db.prepare('delete from audit_logs where database_id = ?').run(id);
+    this.db.prepare('delete from databases where id = ?').run(id);
+
+    if (fs.existsSync(dbPath)) {
+      fs.rmSync(dbPath, { force: true });
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = `${dbPath}${suffix}`;
+        if (fs.existsSync(sidecar)) fs.rmSync(sidecar, { force: true });
+      }
+    }
+
+    return this.toPublic(current);
+  }
+
   markAccess(id: string) {
     this.db.prepare('update databases set last_access_at = ? where id = ?').run(nowIso(), id);
   }
@@ -128,6 +199,25 @@ export class SiteStore {
     this.db
       .prepare('insert into audit_logs (id, database_id, actor, action, detail, created_at) values (?, ?, ?, ?, ?, ?)')
       .run(cryptoRandomId(), input.databaseId || null, input.actor, input.action, JSON.stringify(input.detail ?? null), nowIso());
+  }
+
+  listAuditLogs(input: { databaseId?: string; limit?: number } = {}): AuditLogRecord[] {
+    const limit = Math.min(Math.max(input.limit || 50, 1), 200);
+    const rows = input.databaseId
+      ? (this.db.prepare('select * from audit_logs where database_id = ? order by created_at desc limit ?').all(input.databaseId, limit) as unknown[])
+      : (this.db.prepare('select * from audit_logs order by created_at desc limit ?').all(limit) as unknown[]);
+
+    return rows.map((row) => {
+      const item = row as Record<string, string | null>;
+      return {
+        id: String(item.id),
+        databaseId: item.database_id ?? null,
+        actor: String(item.actor),
+        action: String(item.action),
+        detail: safeJsonParse(item.detail ?? null),
+        createdAt: String(item.created_at)
+      };
+    });
   }
 
   resolveDatabasePath(filename: string) {
@@ -145,11 +235,13 @@ export class SiteStore {
       name: database.name,
       filename: database.filename,
       absolutePath: database.path,
+      fileSize: getFileSize(database.path),
       status: database.status,
       note: database.note,
       createdAt: database.createdAt,
       updatedAt: database.updatedAt,
-      lastAccessAt: database.lastAccessAt
+      lastAccessAt: database.lastAccessAt,
+      deletedAt: database.deletedAt
     };
   }
 
@@ -161,11 +253,12 @@ export class SiteStore {
         filename text not null unique,
         path text not null unique,
         key_hash text not null unique,
-        status text not null check (status in ('active', 'disabled')),
+        status text not null check (status in ('active', 'disabled', 'deleted')),
         note text,
         created_at text not null,
         updated_at text not null,
-        last_access_at text
+        last_access_at text,
+        deleted_at text
       );
 
       create table if not exists audit_logs (
@@ -177,6 +270,41 @@ export class SiteStore {
         created_at text not null,
         foreign key (database_id) references databases(id) on delete set null
       );
+    `);
+
+    this.addColumnIfMissing('databases', 'deleted_at', 'text');
+    this.rebuildDatabasesStatusConstraintIfNeeded();
+  }
+
+  private addColumnIfMissing(table: string, column: string, definition: string) {
+    const columns = this.db.prepare(`pragma table_info(${table})`).all() as Array<{ name: string }>;
+    if (!columns.some((item) => item.name === column)) {
+      this.db.exec(`alter table ${table} add column ${column} ${definition}`);
+    }
+  }
+
+  private rebuildDatabasesStatusConstraintIfNeeded() {
+    const ddl = this.db.prepare("select sql from sqlite_schema where type = 'table' and name = 'databases'").get() as { sql?: string } | undefined;
+    if (ddl?.sql?.includes("'deleted'")) return;
+
+    this.db.exec(`
+      alter table databases rename to databases_old;
+      create table databases (
+        id text primary key,
+        name text not null,
+        filename text not null unique,
+        path text not null unique,
+        key_hash text not null unique,
+        status text not null check (status in ('active', 'disabled', 'deleted')),
+        note text,
+        created_at text not null,
+        updated_at text not null,
+        last_access_at text,
+        deleted_at text
+      );
+      insert into databases (id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at)
+      select id, name, filename, path, key_hash, status, note, created_at, updated_at, last_access_at, deleted_at from databases_old;
+      drop table databases_old;
     `);
   }
 
@@ -192,11 +320,29 @@ export class SiteStore {
       note: item.note ?? null,
       createdAt: String(item.created_at),
       updatedAt: String(item.updated_at),
-      lastAccessAt: item.last_access_at ?? null
+      lastAccessAt: item.last_access_at ?? null,
+      deletedAt: item.deleted_at ?? null
     };
   }
 }
 
 function cryptoRandomId() {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+}
+
+function getFileSize(filePath: string) {
+  try {
+    return fs.statSync(filePath).size;
+  } catch {
+    return 0;
+  }
+}
+
+function safeJsonParse(value: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
