@@ -24,11 +24,15 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@fontsource/outfit": "^5.2.8",
+    "antd": "^6.4.4",
+    "antd-mobile": "^5.42.3",
     "better-sqlite3": "^12.10.0",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "framer-motion": "^12.40.0",
     "helmet": "^8.2.0",
     "nanoid": "^5.1.11",
     "zod": "^4.4.3"
